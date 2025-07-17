@@ -1,0 +1,49 @@
+{
+  "name": "exceladdin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "dev": "webpack serve --mode development",
+    "start": "webpack serve --mode development",
+    "clean": "rm -rf dist node_modules/.cache",
+    "lint": "npx tsc --noEmit",
+    "validate": "office-addin-validator manifest.xml",
+    "setup": "./setup.sh",
+    "cert:install": "office-addin-dev-certs install",
+    "cert:verify": "office-addin-dev-certs verify",
+    "cert:uninstall": "office-addin-dev-certs uninstall",
+    "serve:prod": "npx http-server dist -p 3000 -S -C localhost.pem -K localhost-key.pem",
+    "analyze": "webpack-bundle-analyzer dist/",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.2.0",
+    "@mui/material": "^7.2.0",
+    "@types/office-js": "^1.0.518",
+    "axios": "^1.10.0",
+    "office-js": "^0.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "recharts": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.3",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.100.2",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2"
+  }
+}
