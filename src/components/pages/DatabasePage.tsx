@@ -72,6 +72,12 @@ const DatabasePage: React.FC = () => {
 
   const insertDataIntoExcel = async (data: any) => {
     try {
+      // Check if Excel is available
+      if (typeof Excel === 'undefined' || !Excel.run) {
+        alert('Excel integration not available in development mode. Data would be inserted into Excel in production.');
+        return;
+      }
+
       await Excel.run(async (context) => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
         const range = sheet.getRange('A1');
