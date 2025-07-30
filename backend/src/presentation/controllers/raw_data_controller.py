@@ -7,6 +7,7 @@ import logging
 
 from ...application.services.raw_data_service import RawDataService
 from ...application.dtos.data_dtos import RawDataDownloadRequestDto
+from ...infrastructure.config.fund_mappings import has_fund_filtering
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,14 @@ def get_categories():
 def get_funds(catalog: str):
     """Get funds for a specific catalog."""
     try:
+        # Check if fund filtering is available for this catalog
+        if not has_fund_filtering(catalog):
+            return jsonify({
+                'success': True,
+                'data': [],
+                'fund_filtering_available': False
+            })
+        
         service = RawDataService()
         funds = service.get_funds_by_catalog(catalog)
         
@@ -48,7 +57,8 @@ def get_funds(catalog: str):
         
         return jsonify({
             'success': True,
-            'data': fund_list
+            'data': fund_list,
+            'fund_filtering_available': True
         })
         
     except Exception as e:
@@ -71,8 +81,8 @@ def download_raw_data():
                 'error': 'No data provided'
             }), 400
         
-        # Validate required fields
-        required_fields = ['catalog', 'fund', 'start_date', 'end_date']
+        # Check required fields
+        required_fields = ['catalog', 'start_date', 'end_date']
         for field in required_fields:
             if field not in data:
                 return jsonify({
@@ -80,10 +90,18 @@ def download_raw_data():
                     'error': f'Missing required field: {field}'
                 }), 400
         
-        # Create request DTO
+        # Check if fund is required for this catalog
+        if has_fund_filtering(data['catalog']):
+            if 'fund' not in data or not data['fund']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Fund is required for this catalog'
+                }), 400
+        
+        # Create request DTO - use empty string for fund if not available
         request_dto = RawDataDownloadRequestDto(
             catalog=data['catalog'],
-            fund=data['fund'],
+            fund=data.get('fund', ''),
             start_date=data['start_date'],
             end_date=data['end_date']
         )
