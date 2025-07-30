@@ -169,7 +169,7 @@ const MarketDataPage: React.FC = () => {
           const value = row[header];
           // Format dates and values appropriately
           if (header === 'date' && value) {
-            return new Date(value).toLocaleDateString();
+            return new Date(value).toISOString().split('T')[0];
           }
           return value || '';
         }));
