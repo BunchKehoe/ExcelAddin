@@ -201,7 +201,22 @@ const DatabasePage: React.FC = () => {
       console.log('Inserting data into Excel:', { dataLength: data.length, sampleData: data[0] });
 
       await Excel.run(async (context) => {
-        const sheet = context.workbook.worksheets.getActiveWorksheet();
+        // Create or get a worksheet with the catalog name
+        const worksheetName = selectedCategory || 'RawData';
+        let sheet;
+        
+        try {
+          // Try to get existing worksheet
+          sheet = context.workbook.worksheets.getItem(worksheetName);
+          // Clear existing content
+          sheet.getUsedRange().clear();
+        } catch (error) {
+          // Worksheet doesn't exist, create new one
+          sheet = context.workbook.worksheets.add(worksheetName);
+        }
+        
+        // Activate the sheet
+        sheet.activate();
         
         if (data.length === 0) {
           showNotification('No data to insert', 'warning');
@@ -247,7 +262,7 @@ const DatabasePage: React.FC = () => {
         await context.sync();
       });
       
-      showNotification(`Successfully inserted ${data.length} records into Excel!`, 'success');
+      showNotification(`Successfully inserted ${data.length} records into Excel sheet "${selectedCategory}"!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
       console.error('Error details:', {
@@ -327,7 +342,6 @@ const DatabasePage: React.FC = () => {
             pattern: "\\d{4}-\\d{2}-\\d{2}",
             placeholder: "YYYY-MM-DD"
           }}
-          helperText="Format: YYYY-MM-DD"
         />
 
         <TextField
@@ -341,7 +355,6 @@ const DatabasePage: React.FC = () => {
             pattern: "\\d{4}-\\d{2}-\\d{2}",
             placeholder: "YYYY-MM-DD"
           }}
-          helperText="Format: YYYY-MM-DD"
         />
 
         <Button
