@@ -13,7 +13,8 @@ import {
   Stack,
   Box,
   SelectChangeEvent,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { getRawDataCategories, getRawDataFunds, downloadRawData } from '../api/apiClient';
 
@@ -27,6 +28,29 @@ const DatabasePage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [fundFilteringAvailable, setFundFilteringAvailable] = useState<boolean>(true);
+  
+  // Notification state
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
+
+  const showNotification = (message: string, severity: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setNotification({
+      open: true,
+      message,
+      severity
+    });
+  };
+
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     // Load categories when component mounts
@@ -89,12 +113,12 @@ const DatabasePage: React.FC = () => {
 
   const handleDownload = async () => {
     if (!selectedCategory || !startDate || !endDate) {
-      alert('Please fill in all required fields');
+      showNotification('Please fill in all required fields', 'warning');
       return;
     }
 
     if (fundFilteringAvailable && !selectedFund) {
-      alert('Please select a fund for this category');
+      showNotification('Please select a fund for this category', 'warning');
       return;
     }
 
@@ -141,7 +165,7 @@ const DatabasePage: React.FC = () => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
-        alert(`Excel integration not available in development mode. Would insert ${data.length} records into Excel in production.`);
+        showNotification(`Excel integration not available in development mode. Would insert ${data.length} records into Excel in production.`, 'info');
         console.log('Data to be inserted:', data);
         return;
       }
@@ -150,7 +174,7 @@ const DatabasePage: React.FC = () => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
         
         if (data.length === 0) {
-          alert('No data to insert');
+          showNotification('No data to insert', 'warning');
           return;
         }
 
@@ -179,10 +203,10 @@ const DatabasePage: React.FC = () => {
         await context.sync();
       });
       
-      alert(`Successfully inserted ${data.length} records into Excel!`);
+      showNotification(`Successfully inserted ${data.length} records into Excel!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
-      alert('Error inserting data into Excel');
+      showNotification('Error inserting data into Excel', 'error');
     }
   };
 
@@ -272,6 +296,22 @@ const DatabasePage: React.FC = () => {
           {loading ? 'Downloading...' : 'Download Data'}
         </Button>
       </Stack>
+
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification.severity}
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

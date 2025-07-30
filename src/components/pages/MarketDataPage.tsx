@@ -13,7 +13,8 @@ import {
   Stack,
   Box,
   SelectChangeEvent,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { getMarketDataSecurities, getMarketDataFields, downloadMarketData } from '../api/apiClient';
 
@@ -26,6 +27,29 @@ const MarketDataPage: React.FC = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  
+  // Notification state
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
+
+  const showNotification = (message: string, severity: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setNotification({
+      open: true,
+      message,
+      severity
+    });
+  };
+
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     // Load securities when component mounts
@@ -85,7 +109,7 @@ const MarketDataPage: React.FC = () => {
 
   const handleDownload = async () => {
     if (!selectedSecurity || !selectedField || !startDate || !endDate) {
-      alert('Please fill in all fields');
+      showNotification('Please fill in all fields', 'warning');
       return;
     }
 
@@ -126,7 +150,7 @@ const MarketDataPage: React.FC = () => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
-        alert(`Excel integration not available in development mode. Would insert ${data.length} market data records into Excel in production.`);
+        showNotification(`Excel integration not available in development mode. Would insert ${data.length} market data records into Excel in production.`, 'info');
         console.log('Market data to be inserted:', data);
         return;
       }
@@ -135,7 +159,7 @@ const MarketDataPage: React.FC = () => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
         
         if (data.length === 0) {
-          alert('No data to insert');
+          showNotification('No data to insert', 'warning');
           return;
         }
 
@@ -171,10 +195,10 @@ const MarketDataPage: React.FC = () => {
         await context.sync();
       });
       
-      alert(`Successfully inserted ${data.length} market data records into Excel!`);
+      showNotification(`Successfully inserted ${data.length} market data records into Excel!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
-      alert('Error inserting data into Excel');
+      showNotification('Error inserting data into Excel', 'error');
     }
   };
 
@@ -256,6 +280,22 @@ const MarketDataPage: React.FC = () => {
           {loading ? 'Downloading...' : 'Download Market Data'}
         </Button>
       </Stack>
+
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification.severity}
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
