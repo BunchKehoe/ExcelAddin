@@ -26,6 +26,7 @@ const DatabasePage: React.FC = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [fundFilteringAvailable, setFundFilteringAvailable] = useState<boolean>(true);
 
   useEffect(() => {
     // Load categories when component mounts
@@ -54,6 +55,7 @@ const DatabasePage: React.FC = () => {
       const response = await getRawDataFunds(category);
       if (response.success) {
         setFunds(response.data);
+        setFundFilteringAvailable(response.fund_filtering_available !== false);
       } else {
         setError('Failed to load funds');
       }
@@ -62,6 +64,7 @@ const DatabasePage: React.FC = () => {
       setError('Failed to load funds for selected category');
       // Fallback to mock data
       setFunds(['SAMPLE_FUND_1', 'SAMPLE_FUND_2']);
+      setFundFilteringAvailable(true);
     } finally {
       setLoading(false);
     }
@@ -72,6 +75,7 @@ const DatabasePage: React.FC = () => {
     setSelectedCategory(category);
     setSelectedFund(''); // Reset fund selection
     setFunds([]); // Clear funds
+    setFundFilteringAvailable(true); // Reset fund filtering availability
     setError('');
     
     if (category) {
@@ -84,8 +88,13 @@ const DatabasePage: React.FC = () => {
   };
 
   const handleDownload = async () => {
-    if (!selectedCategory || !selectedFund || !startDate || !endDate) {
-      alert('Please fill in all fields');
+    if (!selectedCategory || !startDate || !endDate) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    if (fundFilteringAvailable && !selectedFund) {
+      alert('Please select a fund for this category');
       return;
     }
 
@@ -93,12 +102,18 @@ const DatabasePage: React.FC = () => {
     setError('');
     
     try {
-      const data = await downloadRawData({
+      const requestData: any = {
         catalog: selectedCategory,
-        fund: selectedFund,
         start_date: startDate,
         end_date: endDate
-      });
+      };
+
+      // Only include fund if filtering is available
+      if (fundFilteringAvailable) {
+        requestData.fund = selectedFund;
+      }
+
+      const data = await downloadRawData(requestData);
       
       if (data.success) {
         // Insert data into Excel
@@ -112,9 +127,9 @@ const DatabasePage: React.FC = () => {
       setError('Error downloading data from backend');
       // Fallback to mock data for demo
       const mockData = [
-        { date: '2024-01-01', value: 100.00, fund: selectedFund },
-        { date: '2024-01-02', value: 101.50, fund: selectedFund },
-        { date: '2024-01-03', value: 99.75, fund: selectedFund }
+        { date: '2024-01-01', value: 100.00, fund: selectedFund || 'N/A' },
+        { date: '2024-01-02', value: 101.50, fund: selectedFund || 'N/A' },
+        { date: '2024-01-03', value: 99.75, fund: selectedFund || 'N/A' }
       ];
       await insertDataIntoExcel(mockData);
     } finally {
@@ -199,11 +214,13 @@ const DatabasePage: React.FC = () => {
           </Select>
         </FormControl>
 
-        <FormControl fullWidth disabled={!selectedCategory || loading}>
-          <InputLabel>Select Fund</InputLabel>
+        <FormControl fullWidth disabled={!selectedCategory || loading || !fundFilteringAvailable}>
+          <InputLabel>
+            {fundFilteringAvailable ? 'Select Fund' : 'Fund filtering not available for this category'}
+          </InputLabel>
           <Select
             value={selectedFund}
-            label="Select Fund"
+            label={fundFilteringAvailable ? 'Select Fund' : 'Fund filtering not available for this category'}
             onChange={handleFundChange}
           >
             {funds.map((fund) => (
@@ -214,15 +231,21 @@ const DatabasePage: React.FC = () => {
           </Select>
         </FormControl>
 
-        {selectedFund && (
+        {selectedCategory && fundFilteringAvailable && selectedFund && (
           <Typography variant="h6" component="h2" sx={{ mt: 2 }}>
             {selectedFund} - {selectedCategory}
           </Typography>
         )}
 
+        {selectedCategory && !fundFilteringAvailable && (
+          <Typography variant="h6" component="h2" sx={{ mt: 2, color: 'text.secondary' }}>
+            {selectedCategory} (No fund filtering available)
+          </Typography>
+        )}
+
         <TextField
           fullWidth
-          label="Start Date"
+          label="Delivery Start"
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
@@ -231,7 +254,7 @@ const DatabasePage: React.FC = () => {
 
         <TextField
           fullWidth
-          label="End Date"
+          label="Delivery End"
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
@@ -243,7 +266,7 @@ const DatabasePage: React.FC = () => {
           fullWidth
           size="large"
           onClick={handleDownload}
-          disabled={loading || !selectedCategory || !selectedFund || !startDate || !endDate}
+          disabled={loading || !selectedCategory || !startDate || !endDate || (fundFilteringAvailable && !selectedFund)}
           sx={{ mt: 3 }}
         >
           {loading ? 'Downloading...' : 'Download Data'}
