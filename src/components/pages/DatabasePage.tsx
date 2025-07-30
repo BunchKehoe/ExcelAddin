@@ -161,6 +161,34 @@ const DatabasePage: React.FC = () => {
     }
   };
 
+  // Helper function to convert column number to Excel column letter(s)
+  const getExcelColumnName = (columnNumber: number): string => {
+    let columnName = '';
+    while (columnNumber > 0) {
+      columnNumber--;
+      columnName = String.fromCharCode(65 + (columnNumber % 26)) + columnName;
+      columnNumber = Math.floor(columnNumber / 26);
+    }
+    return columnName;
+  };
+
+  // Helper function to clean data for Excel compatibility
+  const cleanDataForExcel = (value: any): any => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return isNaN(value) || !isFinite(value) ? '' : value;
+    }
+    if (value instanceof Date) {
+      return value.toISOString().split('T')[0]; // Use ISO date format
+    }
+    return String(value);
+  };
+
   const insertDataIntoExcel = async (data: any[]) => {
     try {
       // Check if Excel is available
@@ -169,6 +197,8 @@ const DatabasePage: React.FC = () => {
         console.log('Data to be inserted:', data);
         return;
       }
+
+      console.log('Inserting data into Excel:', { dataLength: data.length, sampleData: data[0] });
 
       await Excel.run(async (context) => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
@@ -180,15 +210,29 @@ const DatabasePage: React.FC = () => {
 
         // Get headers from first data object
         const headers = Object.keys(data[0]);
-        const rows = data.map(row => headers.map(header => row[header] || ''));
+        console.log('Headers:', headers);
+        
+        // Clean and prepare data rows
+        const rows = data.map(row => 
+          headers.map(header => cleanDataForExcel(row[header]))
+        );
+        
+        console.log('Cleaned rows sample:', rows[0]);
+        
+        // Calculate Excel column range properly
+        const lastColumn = getExcelColumnName(headers.length);
+        const headerRangeAddress = `A1:${lastColumn}1`;
+        const dataRangeAddress = `A2:${lastColumn}${rows.length + 1}`;
+        
+        console.log('Range addresses:', { headerRangeAddress, dataRangeAddress });
         
         // Insert headers
-        const headerRange = sheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
+        const headerRange = sheet.getRange(headerRangeAddress);
         headerRange.values = [headers];
         
         // Insert data
         if (rows.length > 0) {
-          const dataRange = sheet.getRange(`A2:${String.fromCharCode(64 + headers.length)}${rows.length + 1}`);
+          const dataRange = sheet.getRange(dataRangeAddress);
           dataRange.values = rows;
         }
         
@@ -206,7 +250,12 @@ const DatabasePage: React.FC = () => {
       showNotification(`Successfully inserted ${data.length} records into Excel!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
-      showNotification('Error inserting data into Excel', 'error');
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      showNotification(`Error inserting data into Excel: ${error.message}`, 'error');
     }
   };
 
