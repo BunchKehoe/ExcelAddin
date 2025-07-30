@@ -125,8 +125,8 @@ const MarketDataPage: React.FC = () => {
       });
       
       if (data.success) {
-        // Insert data into Excel
-        await insertDataIntoExcel(data.data);
+        // Insert data into Excel with preserved column order
+        await insertDataIntoExcel(data.data, data.columns);
       } else {
         setError(data.error || 'Failed to download data');
       }
@@ -146,7 +146,7 @@ const MarketDataPage: React.FC = () => {
     }
   };
 
-  const insertDataIntoExcel = async (data: any[]) => {
+  const insertDataIntoExcel = async (data: any[], columns?: string[]) => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
@@ -163,8 +163,8 @@ const MarketDataPage: React.FC = () => {
           return;
         }
 
-        // Get headers from first data object
-        const headers = Object.keys(data[0]);
+        // Use provided column order or fall back to Object.keys()
+        const headers = columns && columns.length > 0 ? columns : Object.keys(data[0]);
         const rows = data.map(row => headers.map(header => {
           const value = row[header];
           // Format dates and values appropriately
@@ -258,6 +258,11 @@ const MarketDataPage: React.FC = () => {
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
           InputLabelProps={{ shrink: true }}
+          inputProps={{
+            pattern: "\\d{4}-\\d{2}-\\d{2}",
+            placeholder: "YYYY-MM-DD"
+          }}
+          helperText="Format: YYYY-MM-DD"
         />
 
         <TextField
@@ -267,6 +272,11 @@ const MarketDataPage: React.FC = () => {
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           InputLabelProps={{ shrink: true }}
+          inputProps={{
+            pattern: "\\d{4}-\\d{2}-\\d{2}",
+            placeholder: "YYYY-MM-DD"
+          }}
+          helperText="Format: YYYY-MM-DD"
         />
 
         <Button

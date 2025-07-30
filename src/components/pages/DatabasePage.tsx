@@ -140,8 +140,8 @@ const DatabasePage: React.FC = () => {
       const data = await downloadRawData(requestData);
       
       if (data.success) {
-        // Insert data into Excel
-        await insertDataIntoExcel(data.data);
+        // Insert data into Excel with preserved column order
+        await insertDataIntoExcel(data.data, data.columns);
       } else {
         setError(data.error || 'Failed to download data');
       }
@@ -189,7 +189,7 @@ const DatabasePage: React.FC = () => {
     return String(value);
   };
 
-  const insertDataIntoExcel = async (data: any[]) => {
+  const insertDataIntoExcel = async (data: any[], columns?: string[]) => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
@@ -208,9 +208,9 @@ const DatabasePage: React.FC = () => {
           return;
         }
 
-        // Get headers from first data object
-        const headers = Object.keys(data[0]);
-        console.log('Headers:', headers);
+        // Use provided column order or fall back to Object.keys()
+        const headers = columns && columns.length > 0 ? columns : Object.keys(data[0]);
+        console.log('Headers (with preserved order):', headers);
         
         // Clean and prepare data rows
         const rows = data.map(row => 
@@ -323,6 +323,11 @@ const DatabasePage: React.FC = () => {
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
           InputLabelProps={{ shrink: true }}
+          inputProps={{
+            pattern: "\\d{4}-\\d{2}-\\d{2}",
+            placeholder: "YYYY-MM-DD"
+          }}
+          helperText="Format: YYYY-MM-DD"
         />
 
         <TextField
@@ -332,6 +337,11 @@ const DatabasePage: React.FC = () => {
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           InputLabelProps={{ shrink: true }}
+          inputProps={{
+            pattern: "\\d{4}-\\d{2}-\\d{2}",
+            placeholder: "YYYY-MM-DD"
+          }}
+          helperText="Format: YYYY-MM-DD"
         />
 
         <Button
