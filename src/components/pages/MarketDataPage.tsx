@@ -15,76 +15,76 @@ import {
   SelectChangeEvent,
   Alert
 } from '@mui/material';
-import { getRawDataCategories, getRawDataFunds, downloadRawData } from '../api/apiClient';
+import { getMarketDataSecurities, getMarketDataFields, downloadMarketData } from '../api/apiClient';
 
-const DatabasePage: React.FC = () => {
-  const [categories, setCategories] = useState<string[]>([]);
-  const [funds, setFunds] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedFund, setSelectedFund] = useState<string>('');
+const MarketDataPage: React.FC = () => {
+  const [securities, setSecurities] = useState<string[]>([]);
+  const [fields, setFields] = useState<string[]>([]);
+  const [selectedSecurity, setSelectedSecurity] = useState<string>('');
+  const [selectedField, setSelectedField] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    // Load categories when component mounts
-    loadCategories();
+    // Load securities when component mounts
+    loadSecurities();
   }, []);
 
-  const loadCategories = async () => {
+  const loadSecurities = async () => {
     try {
-      const response = await getRawDataCategories();
+      const response = await getMarketDataSecurities();
       if (response.success) {
-        setCategories(response.data);
+        setSecurities(response.data);
       } else {
-        setError('Failed to load categories');
+        setError('Failed to load securities');
       }
     } catch (error) {
-      console.error('Error loading categories:', error);
+      console.error('Error loading securities:', error);
       setError('Failed to connect to backend. Make sure the Flask server is running on localhost:5000');
       // Fallback to mock data
-      setCategories(['SAMPLE_CATEGORY_1', 'SAMPLE_CATEGORY_2']);
+      setSecurities(['AAPL US Equity', 'MSFT US Equity', 'GOOGL US Equity']);
     }
   };
 
-  const loadFunds = async (category: string) => {
+  const loadFields = async (security: string) => {
     try {
       setLoading(true);
-      const response = await getRawDataFunds(category);
+      const response = await getMarketDataFields(security);
       if (response.success) {
-        setFunds(response.data);
+        setFields(response.data);
       } else {
-        setError('Failed to load funds');
+        setError('Failed to load fields');
       }
     } catch (error) {
-      console.error('Error loading funds:', error);
-      setError('Failed to load funds for selected category');
+      console.error('Error loading fields:', error);
+      setError('Failed to load fields for selected security');
       // Fallback to mock data
-      setFunds(['SAMPLE_FUND_1', 'SAMPLE_FUND_2']);
+      setFields(['PX_LAST', 'PX_OPEN', 'PX_HIGH', 'PX_LOW', 'PX_VOLUME']);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCategoryChange = (event: SelectChangeEvent<string>) => {
-    const category = event.target.value;
-    setSelectedCategory(category);
-    setSelectedFund(''); // Reset fund selection
-    setFunds([]); // Clear funds
+  const handleSecurityChange = (event: SelectChangeEvent<string>) => {
+    const security = event.target.value;
+    setSelectedSecurity(security);
+    setSelectedField(''); // Reset field selection
+    setFields([]); // Clear fields
     setError('');
     
-    if (category) {
-      loadFunds(category);
+    if (security) {
+      loadFields(security);
     }
   };
 
-  const handleFundChange = (event: SelectChangeEvent<string>) => {
-    setSelectedFund(event.target.value);
+  const handleFieldChange = (event: SelectChangeEvent<string>) => {
+    setSelectedField(event.target.value);
   };
 
   const handleDownload = async () => {
-    if (!selectedCategory || !selectedFund || !startDate || !endDate) {
+    if (!selectedSecurity || !selectedField || !startDate || !endDate) {
       alert('Please fill in all fields');
       return;
     }
@@ -93,9 +93,9 @@ const DatabasePage: React.FC = () => {
     setError('');
     
     try {
-      const data = await downloadRawData({
-        catalog: selectedCategory,
-        fund: selectedFund,
+      const data = await downloadMarketData({
+        security: selectedSecurity,
+        field: selectedField,
         start_date: startDate,
         end_date: endDate
       });
@@ -112,9 +112,9 @@ const DatabasePage: React.FC = () => {
       setError('Error downloading data from backend');
       // Fallback to mock data for demo
       const mockData = [
-        { date: '2024-01-01', value: 100.00, fund: selectedFund },
-        { date: '2024-01-02', value: 101.50, fund: selectedFund },
-        { date: '2024-01-03', value: 99.75, fund: selectedFund }
+        { date: '2024-01-01', security: selectedSecurity, field: selectedField, value: 150.00 },
+        { date: '2024-01-02', security: selectedSecurity, field: selectedField, value: 152.50 },
+        { date: '2024-01-03', security: selectedSecurity, field: selectedField, value: 148.75 }
       ];
       await insertDataIntoExcel(mockData);
     } finally {
@@ -126,8 +126,8 @@ const DatabasePage: React.FC = () => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
-        alert(`Excel integration not available in development mode. Would insert ${data.length} records into Excel in production.`);
-        console.log('Data to be inserted:', data);
+        alert(`Excel integration not available in development mode. Would insert ${data.length} market data records into Excel in production.`);
+        console.log('Market data to be inserted:', data);
         return;
       }
 
@@ -141,7 +141,14 @@ const DatabasePage: React.FC = () => {
 
         // Get headers from first data object
         const headers = Object.keys(data[0]);
-        const rows = data.map(row => headers.map(header => row[header] || ''));
+        const rows = data.map(row => headers.map(header => {
+          const value = row[header];
+          // Format dates and values appropriately
+          if (header === 'date' && value) {
+            return new Date(value).toLocaleDateString();
+          }
+          return value || '';
+        }));
         
         // Insert headers
         const headerRange = sheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
@@ -155,7 +162,7 @@ const DatabasePage: React.FC = () => {
         
         // Format headers
         headerRange.format.font.bold = true;
-        headerRange.format.fill.color = '#4472C4';
+        headerRange.format.fill.color = '#2E7D32';
         headerRange.format.font.color = 'white';
         
         // Auto-fit columns
@@ -164,7 +171,7 @@ const DatabasePage: React.FC = () => {
         await context.sync();
       });
       
-      alert(`Successfully inserted ${data.length} records into Excel!`);
+      alert(`Successfully inserted ${data.length} market data records into Excel!`);
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
       alert('Error inserting data into Excel');
@@ -174,7 +181,7 @@ const DatabasePage: React.FC = () => {
   return (
     <Container maxWidth="sm" sx={{ mt: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom align="center">
-        Raw Database Tables
+        Market Data
       </Typography>
       
       {error && (
@@ -185,38 +192,38 @@ const DatabasePage: React.FC = () => {
       
       <Stack spacing={3} sx={{ mt: 4 }}>
         <FormControl fullWidth>
-          <InputLabel>Select Category</InputLabel>
+          <InputLabel>Select Security</InputLabel>
           <Select
-            value={selectedCategory}
-            label="Select Category"
-            onChange={handleCategoryChange}
+            value={selectedSecurity}
+            label="Select Security"
+            onChange={handleSecurityChange}
           >
-            {categories.map((category) => (
-              <MenuItem key={category} value={category}>
-                {category}
+            {securities.map((security) => (
+              <MenuItem key={security} value={security}>
+                {security}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <FormControl fullWidth disabled={!selectedCategory || loading}>
-          <InputLabel>Select Fund</InputLabel>
+        <FormControl fullWidth disabled={!selectedSecurity || loading}>
+          <InputLabel>Select Field</InputLabel>
           <Select
-            value={selectedFund}
-            label="Select Fund"
-            onChange={handleFundChange}
+            value={selectedField}
+            label="Select Field"
+            onChange={handleFieldChange}
           >
-            {funds.map((fund) => (
-              <MenuItem key={fund} value={fund}>
-                {fund}
+            {fields.map((field) => (
+              <MenuItem key={field} value={field}>
+                {field}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        {selectedFund && (
+        {selectedField && (
           <Typography variant="h6" component="h2" sx={{ mt: 2 }}>
-            {selectedFund} - {selectedCategory}
+            {selectedSecurity} - {selectedField}
           </Typography>
         )}
 
@@ -243,14 +250,14 @@ const DatabasePage: React.FC = () => {
           fullWidth
           size="large"
           onClick={handleDownload}
-          disabled={loading || !selectedCategory || !selectedFund || !startDate || !endDate}
-          sx={{ mt: 3 }}
+          disabled={loading || !selectedSecurity || !selectedField || !startDate || !endDate}
+          sx={{ mt: 3, backgroundColor: '#2E7D32', '&:hover': { backgroundColor: '#1B5E20' } }}
         >
-          {loading ? 'Downloading...' : 'Download Data'}
+          {loading ? 'Downloading...' : 'Download Market Data'}
         </Button>
       </Stack>
     </Container>
   );
 };
 
-export default DatabasePage;
+export default MarketDataPage;

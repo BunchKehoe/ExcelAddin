@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://your-python-backend.com/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -17,6 +17,83 @@ interface DownloadDataParams {
   endDate: string;
 }
 
+interface RawDataDownloadParams {
+  catalog: string;
+  fund: string;
+  start_date: string;
+  end_date: string;
+}
+
+interface MarketDataDownloadParams {
+  security: string;
+  field: string;
+  start_date: string;
+  end_date: string;
+}
+
+// Raw Data Endpoints
+export const getRawDataCategories = async () => {
+  try {
+    const response = await apiClient.get('/raw-data/categories');
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const getRawDataFunds = async (catalog: string) => {
+  try {
+    const response = await apiClient.get(`/raw-data/funds/${catalog}`);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const downloadRawData = async (params: RawDataDownloadParams) => {
+  try {
+    const response = await apiClient.post('/raw-data/download', params);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+// Market Data Endpoints
+export const getMarketDataSecurities = async () => {
+  try {
+    const response = await apiClient.get('/market-data/securities');
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const getMarketDataFields = async (security: string) => {
+  try {
+    const response = await apiClient.get(`/market-data/fields/${security}`);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const downloadMarketData = async (params: MarketDataDownloadParams) => {
+  try {
+    const response = await apiClient.post('/market-data/download', params);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+// Legacy endpoints for backward compatibility
 export const downloadData = async (params: DownloadDataParams) => {
   try {
     const response = await apiClient.post('/download-data', params);

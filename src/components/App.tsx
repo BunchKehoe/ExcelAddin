@@ -12,6 +12,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
 import DatabasePage from './pages/DatabasePage';
+import MarketDataPage from './pages/MarketDataPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import DashboardsPage from './pages/DashboardsPage';
 import ExcelFunctionsPage from './pages/ExcelFunctionsPage';
@@ -27,7 +28,7 @@ const theme = createTheme({
   },
 });
 
-type Page = 'home' | 'database' | 'applications' | 'dashboards' | 'excel-functions';
+type Page = 'home' | 'database' | 'market-data' | 'applications' | 'dashboards' | 'excel-functions';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -36,6 +37,8 @@ const App: React.FC = () => {
     switch (currentPage) {
       case 'database':
         return <DatabasePage />;
+      case 'market-data':
+        return <MarketDataPage />;
       case 'applications':
         return <ApplicationsPage />;
       case 'dashboards':
@@ -58,7 +61,16 @@ const App: React.FC = () => {
                 size="large"
                 onClick={() => setCurrentPage('database')}
               >
-                Database
+                Raw Database Tables
+              </Button>
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
+                onClick={() => setCurrentPage('market-data')}
+                sx={{ backgroundColor: '#2E7D32', '&:hover': { backgroundColor: '#1B5E20' } }}
+              >
+                Market Data
               </Button>
               <Button
                 variant="contained"
