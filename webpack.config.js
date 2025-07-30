@@ -55,7 +55,7 @@ module.exports = {
     port: 3000,
     open: false,
     hot: true,
-    https: true,
+    server: 'https',
     allowedHosts: 'all',
     headers: {
       'Access-Control-Allow-Origin': '*',
