@@ -67,7 +67,7 @@
               <SourceLocation resid="Commands.Url"/>
             </Page>
             <Metadata>
-              <SourceLocation resid="Commands.Url"/>
+              <SourceLocation resid="Functions.Metadata.Url"/>
             </Metadata>
             <Namespace resid="CustomFunctions.Namespace"/>
           </ExtensionPoint>
@@ -83,6 +83,7 @@
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000"/>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html"/>
+        <bt:Url id="Functions.Metadata.Url" DefaultValue="https://localhost:3000/functions.json"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
