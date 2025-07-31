@@ -48,6 +48,17 @@ function JOINCELLS(range: any[][], delimiter: string = ","): string {
   return values.join(delimiter);
 }
 
-// Make functions available globally for Excel
+// Make functions available globally for Excel with multiple registration approaches
 (globalThis as any).AGGIRR = AGGIRR;
 (globalThis as any).JOINCELLS = JOINCELLS;
+
+// Also try window registration as backup
+if (typeof window !== 'undefined') {
+  (window as any).AGGIRR = AGGIRR;
+  (window as any).JOINCELLS = JOINCELLS;
+}
+
+// Initialize when Office is ready
+Office.onReady(() => {
+  console.log('Custom Functions ready: AGGIRR and JOINCELLS registered');
+});
