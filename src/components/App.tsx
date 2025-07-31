@@ -13,23 +13,15 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import 'dayjs/locale/de';
+import theme from '../theme';
 
+// @ts-ignore
+import PCAGLogo from '../assets/PCAG_white_trans.png';
 import DatabasePage from './pages/DatabasePage';
 import MarketDataPage from './pages/MarketDataPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import DashboardsPage from './pages/DashboardsPage';
 import ExcelFunctionsPage from './pages/ExcelFunctionsPage';
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-});
 
 type Page = 'home' | 'database' | 'market-data' | 'applications' | 'dashboards' | 'excel-functions';
 
@@ -52,7 +44,8 @@ const App: React.FC = () => {
         return (
           <Container maxWidth="sm" sx={{ mt: 4 }}>
             <Typography variant="h4" component="h1" gutterBottom align="center">
-              Welcome to PrimeExcelence
+              Welcome to<br />
+              Prime Excellence
             </Typography>
             <Typography variant="body1" paragraph align="center">
               Select a function from the buttons below to get started.
@@ -64,14 +57,13 @@ const App: React.FC = () => {
                 size="large"
                 onClick={() => setCurrentPage('database')}
               >
-                Raw Database Tables
+                Raw Admin Data
               </Button>
               <Button
                 variant="contained"
                 fullWidth
                 size="large"
                 onClick={() => setCurrentPage('market-data')}
-                sx={{ backgroundColor: '#2E7D32', '&:hover': { backgroundColor: '#1B5E20' } }}
               >
                 Market Data
               </Button>
@@ -107,26 +99,37 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="de">
-        <CssBaseline />
-        <Box sx={{ flexGrow: 1 }}>
-          <AppBar position="static">
-            <Toolbar>
-              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                PrimeExcelence
+    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="de">
+      <CssBaseline />
+      <Box sx={{ flexGrow: 1 }}>
+        <AppBar position="static">
+          <Toolbar sx={{ minHeight: 65 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+              <Box
+                component="img"
+                src={PCAGLogo}
+                alt="Prime Capital Logo"
+                sx={{ height: 40, mr: 2 }}
+              />
+              <Typography variant="h6" component="div" sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box component="span" sx={{ fontWeight: 'bold' }}>
+                  Excel
+                </Box>
+                lence
               </Typography>
-              {currentPage !== 'home' && (
-                <Button color="inherit" onClick={() => setCurrentPage('home')}>
-                  Home
-                </Button>
-              )}
-            </Toolbar>
-          </AppBar>
-          <Box sx={{ minHeight: 'calc(100vh - 64px)' }}>
-            {renderPage()}
-          </Box>
+            </Box>
+            {currentPage !== 'home' && (
+              <Button color="inherit" onClick={() => setCurrentPage('home')}>
+                Home
+              </Button>
+            )}
+          </Toolbar>
+        </AppBar>
+        <Box sx={{ minHeight: '100vh-100px' }}>
+          {renderPage()}
         </Box>
-      </LocalizationProvider>
+      </Box>
+     </LocalizationProvider>
     </ThemeProvider>
   );
 };
