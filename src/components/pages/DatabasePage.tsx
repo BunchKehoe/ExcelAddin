@@ -206,36 +206,50 @@ const DatabasePage: React.FC = () => {
         // Create or get a worksheet with the catalog name
         const worksheetName = selectedCategory || 'RawData';
         let sheet;
+        let worksheetExists = false;
         
         console.log('Attempting to work with worksheet:', worksheetName);
         
-        try {
-          // Try to get existing worksheet
-          sheet = context.workbook.worksheets.getItem(worksheetName);
-          console.log('Found existing worksheet:', worksheetName);
-          
-          // Clear existing content if it exists
-          try {
-            const usedRange = sheet.getUsedRange();
-            usedRange.clear();
-            console.log('Cleared existing content from worksheet');
-          } catch (rangeError) {
-            // No used range to clear (empty worksheet), continue
-            console.log('No used range to clear in existing worksheet');
+        // First, check if the worksheet exists by loading all worksheets
+        const worksheets = context.workbook.worksheets;
+        worksheets.load("items/name");
+        await context.sync();
+        
+        // Check if worksheet with the name exists
+        for (let i = 0; i < worksheets.items.length; i++) {
+          if (worksheets.items[i].name === worksheetName) {
+            worksheetExists = true;
+            sheet = worksheets.items[i];
+            console.log('Found existing worksheet:', worksheetName);
+            break;
           }
-        } catch (error) {
+        }
+        
+        if (!worksheetExists) {
           // Worksheet doesn't exist, create new one
           console.log('Worksheet does not exist, creating new one:', worksheetName);
           sheet = context.workbook.worksheets.add(worksheetName);
           console.log('Successfully created new worksheet:', worksheetName);
+          await context.sync();
+        } else {
+          // Clear existing content if it exists
+          try {
+            const usedRange = sheet.getUsedRange();
+            usedRange.load("address");
+            await context.sync();
+            usedRange.clear();
+            console.log('Cleared existing content from worksheet');
+            await context.sync();
+          } catch (rangeError) {
+            // No used range to clear (empty worksheet), continue
+            console.log('No used range to clear in existing worksheet');
+          }
         }
-        
-        // Sync changes before activating
-        await context.sync();
         
         // Activate the sheet
         sheet.activate();
         console.log('Activated worksheet:', worksheetName);
+        await context.sync();
         
         if (data.length === 0) {
           showNotification('No data to insert', 'warning');
