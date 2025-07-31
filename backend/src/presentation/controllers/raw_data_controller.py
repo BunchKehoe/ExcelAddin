@@ -127,9 +127,15 @@ def download_raw_data():
             records = service.download_raw_data(request_dto)
             data_list = [record.data for record in records]
             
+            # Get column names from first record to preserve order
+            columns = []
+            if data_list:
+                columns = list(data_list[0].keys())
+            
             return jsonify({
                 'success': True,
                 'count': len(data_list),
+                'columns': columns,  # Preserve column order from database
                 'data': data_list
             })
     

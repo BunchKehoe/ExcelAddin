@@ -13,8 +13,11 @@ import {
   Stack,
   Box,
   SelectChangeEvent,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import { getRawDataCategories, getRawDataFunds, downloadRawData } from '../api/apiClient';
 
 const DatabasePage: React.FC = () => {
@@ -22,11 +25,34 @@ const DatabasePage: React.FC = () => {
   const [funds, setFunds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedFund, setSelectedFund] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<Dayjs | null>(null);
+  const [endDate, setEndDate] = useState<Dayjs | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [fundFilteringAvailable, setFundFilteringAvailable] = useState<boolean>(true);
+  
+  // Notification state
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
+
+  const showNotification = (message: string, severity: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setNotification({
+      open: true,
+      message,
+      severity
+    });
+  };
+
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     // Load categories when component mounts
@@ -89,12 +115,12 @@ const DatabasePage: React.FC = () => {
 
   const handleDownload = async () => {
     if (!selectedCategory || !startDate || !endDate) {
-      alert('Please fill in all required fields');
+      showNotification('Please fill in all required fields', 'warning');
       return;
     }
 
     if (fundFilteringAvailable && !selectedFund) {
-      alert('Please select a fund for this category');
+      showNotification('Please select a fund for this category', 'warning');
       return;
     }
 
@@ -104,8 +130,8 @@ const DatabasePage: React.FC = () => {
     try {
       const requestData: any = {
         catalog: selectedCategory,
-        start_date: startDate,
-        end_date: endDate
+        start_date: startDate.format('YYYY-MM-DD'),
+        end_date: endDate.format('YYYY-MM-DD')
       };
 
       // Only include fund if filtering is available
@@ -116,8 +142,8 @@ const DatabasePage: React.FC = () => {
       const data = await downloadRawData(requestData);
       
       if (data.success) {
-        // Insert data into Excel
-        await insertDataIntoExcel(data.data);
+        // Insert data into Excel with preserved column order
+        await insertDataIntoExcel(data.data, data.columns);
       } else {
         setError(data.error || 'Failed to download data');
       }
@@ -137,34 +163,124 @@ const DatabasePage: React.FC = () => {
     }
   };
 
-  const insertDataIntoExcel = async (data: any[]) => {
+  // Helper function to convert column number to Excel column letter(s)
+  const getExcelColumnName = (columnNumber: number): string => {
+    let columnName = '';
+    while (columnNumber > 0) {
+      columnNumber--;
+      columnName = String.fromCharCode(65 + (columnNumber % 26)) + columnName;
+      columnNumber = Math.floor(columnNumber / 26);
+    }
+    return columnName;
+  };
+
+  // Helper function to clean data for Excel compatibility
+  const cleanDataForExcel = (value: any): any => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return isNaN(value) || !isFinite(value) ? '' : value;
+    }
+    if (value instanceof Date) {
+      return value.toISOString().split('T')[0]; // Use ISO date format
+    }
+    return String(value);
+  };
+
+  const insertDataIntoExcel = async (data: any[], columns?: string[]) => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
-        alert(`Excel integration not available in development mode. Would insert ${data.length} records into Excel in production.`);
+        showNotification(`Excel integration not available in development mode. Would insert ${data.length} records into Excel in production.`, 'info');
         console.log('Data to be inserted:', data);
         return;
       }
 
+      console.log('Inserting data into Excel:', { dataLength: data.length, sampleData: data[0] });
+
       await Excel.run(async (context) => {
-        const sheet = context.workbook.worksheets.getActiveWorksheet();
+        // Create or get a worksheet with the catalog name
+        const worksheetName = selectedCategory || 'RawData';
+        let sheet;
+        let worksheetExists = false;
+        
+        console.log('Attempting to work with worksheet:', worksheetName);
+        
+        // First, check if the worksheet exists by loading all worksheets
+        const worksheets = context.workbook.worksheets;
+        worksheets.load("items/name");
+        await context.sync();
+        
+        // Check if worksheet with the name exists
+        for (let i = 0; i < worksheets.items.length; i++) {
+          if (worksheets.items[i].name === worksheetName) {
+            worksheetExists = true;
+            sheet = worksheets.items[i];
+            console.log('Found existing worksheet:', worksheetName);
+            break;
+          }
+        }
+        
+        if (!worksheetExists) {
+          // Worksheet doesn't exist, create new one
+          console.log('Worksheet does not exist, creating new one:', worksheetName);
+          sheet = context.workbook.worksheets.add(worksheetName);
+          console.log('Successfully created new worksheet:', worksheetName);
+          await context.sync();
+        } else {
+          // Clear existing content if it exists
+          try {
+            const usedRange = sheet.getUsedRange();
+            usedRange.load("address");
+            await context.sync();
+            usedRange.clear();
+            console.log('Cleared existing content from worksheet');
+            await context.sync();
+          } catch (rangeError) {
+            // No used range to clear (empty worksheet), continue
+            console.log('No used range to clear in existing worksheet');
+          }
+        }
+        
+        // Activate the sheet
+        sheet.activate();
+        console.log('Activated worksheet:', worksheetName);
+        await context.sync();
         
         if (data.length === 0) {
-          alert('No data to insert');
+          showNotification('No data to insert', 'warning');
           return;
         }
 
-        // Get headers from first data object
-        const headers = Object.keys(data[0]);
-        const rows = data.map(row => headers.map(header => row[header] || ''));
+        // Use provided column order or fall back to Object.keys()
+        const headers = columns && columns.length > 0 ? columns : Object.keys(data[0]);
+        console.log('Headers (with preserved order):', headers);
+        
+        // Clean and prepare data rows
+        const rows = data.map(row => 
+          headers.map(header => cleanDataForExcel(row[header]))
+        );
+        
+        console.log('Cleaned rows sample:', rows[0]);
+        
+        // Calculate Excel column range properly
+        const lastColumn = getExcelColumnName(headers.length);
+        const headerRangeAddress = `A1:${lastColumn}1`;
+        const dataRangeAddress = `A2:${lastColumn}${rows.length + 1}`;
+        
+        console.log('Range addresses:', { headerRangeAddress, dataRangeAddress });
         
         // Insert headers
-        const headerRange = sheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
+        const headerRange = sheet.getRange(headerRangeAddress);
         headerRange.values = [headers];
         
         // Insert data
         if (rows.length > 0) {
-          const dataRange = sheet.getRange(`A2:${String.fromCharCode(64 + headers.length)}${rows.length + 1}`);
+          const dataRange = sheet.getRange(dataRangeAddress);
           dataRange.values = rows;
         }
         
@@ -173,16 +289,27 @@ const DatabasePage: React.FC = () => {
         headerRange.format.fill.color = '#4472C4';
         headerRange.format.font.color = 'white';
         
-        // Auto-fit columns
-        sheet.getUsedRange().format.autofitColumns();
+        // Auto-fit columns if there's data
+        try {
+          const usedRange = sheet.getUsedRange();
+          usedRange.format.autofitColumns();
+        } catch (rangeError) {
+          // No used range to format (shouldn't happen since we just added data)
+          console.log('No used range to auto-fit');
+        }
         
         await context.sync();
       });
       
-      alert(`Successfully inserted ${data.length} records into Excel!`);
+      showNotification(`Successfully inserted ${data.length} records into Excel sheet "${selectedCategory}"!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
-      alert('Error inserting data into Excel');
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      showNotification(`Error inserting data into Excel: ${error.message}`, 'error');
     }
   };
 
@@ -243,22 +370,26 @@ const DatabasePage: React.FC = () => {
           </Typography>
         )}
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="Delivery Start"
-          type="date"
           value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          onChange={(newValue) => setStartDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
+          }}
         />
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="Delivery End"
-          type="date"
           value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          onChange={(newValue) => setEndDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
+          }}
         />
 
         <Button
@@ -272,6 +403,22 @@ const DatabasePage: React.FC = () => {
           {loading ? 'Downloading...' : 'Download Data'}
         </Button>
       </Stack>
+
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification.severity}
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

@@ -13,8 +13,11 @@ import {
   Stack,
   Box,
   SelectChangeEvent,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import { getMarketDataSecurities, getMarketDataFields, downloadMarketData } from '../api/apiClient';
 
 const MarketDataPage: React.FC = () => {
@@ -22,10 +25,33 @@ const MarketDataPage: React.FC = () => {
   const [fields, setFields] = useState<string[]>([]);
   const [selectedSecurity, setSelectedSecurity] = useState<string>('');
   const [selectedField, setSelectedField] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<Dayjs | null>(null);
+  const [endDate, setEndDate] = useState<Dayjs | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  
+  // Notification state
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'error' | 'warning' | 'info' | 'success';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
+
+  const showNotification = (message: string, severity: 'error' | 'warning' | 'info' | 'success' = 'info') => {
+    setNotification({
+      open: true,
+      message,
+      severity
+    });
+  };
+
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     // Load securities when component mounts
@@ -85,7 +111,7 @@ const MarketDataPage: React.FC = () => {
 
   const handleDownload = async () => {
     if (!selectedSecurity || !selectedField || !startDate || !endDate) {
-      alert('Please fill in all fields');
+      showNotification('Please fill in all fields', 'warning');
       return;
     }
 
@@ -96,13 +122,13 @@ const MarketDataPage: React.FC = () => {
       const data = await downloadMarketData({
         security: selectedSecurity,
         field: selectedField,
-        start_date: startDate,
-        end_date: endDate
+        start_date: startDate.format('YYYY-MM-DD'),
+        end_date: endDate.format('YYYY-MM-DD')
       });
       
       if (data.success) {
-        // Insert data into Excel
-        await insertDataIntoExcel(data.data);
+        // Insert data into Excel with preserved column order
+        await insertDataIntoExcel(data.data, data.columns);
       } else {
         setError(data.error || 'Failed to download data');
       }
@@ -122,11 +148,39 @@ const MarketDataPage: React.FC = () => {
     }
   };
 
-  const insertDataIntoExcel = async (data: any[]) => {
+  // Helper function to convert column number to Excel column letter(s)
+  const getExcelColumnName = (columnNumber: number): string => {
+    let columnName = '';
+    while (columnNumber > 0) {
+      columnNumber--;
+      columnName = String.fromCharCode(65 + (columnNumber % 26)) + columnName;
+      columnNumber = Math.floor(columnNumber / 26);
+    }
+    return columnName;
+  };
+
+  // Helper function to clean data for Excel compatibility
+  const cleanDataForExcel = (value: any): any => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return isNaN(value) || !isFinite(value) ? '' : value;
+    }
+    if (value instanceof Date) {
+      return value.toISOString().split('T')[0]; // Use ISO date format
+    }
+    return String(value);
+  };
+
+  const insertDataIntoExcel = async (data: any[], columns?: string[]) => {
     try {
       // Check if Excel is available
       if (typeof Excel === 'undefined' || !Excel.run) {
-        alert(`Excel integration not available in development mode. Would insert ${data.length} market data records into Excel in production.`);
+        showNotification(`Excel integration not available in development mode. Would insert ${data.length} market data records into Excel in production.`, 'info');
         console.log('Market data to be inserted:', data);
         return;
       }
@@ -135,28 +189,62 @@ const MarketDataPage: React.FC = () => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
         
         if (data.length === 0) {
-          alert('No data to insert');
+          showNotification('No data to insert', 'warning');
           return;
         }
 
-        // Get headers from first data object
-        const headers = Object.keys(data[0]);
-        const rows = data.map(row => headers.map(header => {
-          const value = row[header];
-          // Format dates and values appropriately
-          if (header === 'date' && value) {
-            return new Date(value).toLocaleDateString();
-          }
-          return value || '';
-        }));
+        // Get the currently selected range to determine starting cell
+        const selectedRange = context.workbook.getSelectedRange();
+        selectedRange.load("address");
+        await context.sync();
+        
+        // Parse the starting cell from the selected range
+        const addressParts = selectedRange.address.split('!');
+        const cellAddress = addressParts.length > 1 ? addressParts[1] : selectedRange.address;
+        const startCellMatch = cellAddress.match(/^([A-Z]+)(\d+)/);
+        
+        let startColumn = 'A';
+        let startRow = 1;
+        
+        if (startCellMatch) {
+          startColumn = startCellMatch[1];
+          startRow = parseInt(startCellMatch[2]);
+        }
+
+        // Use provided column order or fall back to Object.keys()
+        const headers = columns && columns.length > 0 ? columns : Object.keys(data[0]);
+        
+        // Clean and prepare data rows
+        const rows = data.map(row => 
+          headers.map(header => cleanDataForExcel(row[header]))
+        );
+        
+        // Calculate ending column based on number of headers and starting column
+        const startColumnNum = startColumn.split('').reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0);
+        const endColumnNum = startColumnNum + headers.length - 1;
+        const endColumn = getExcelColumnName(endColumnNum);
+        
+        // Calculate ranges
+        const headerRangeAddress = `${startColumn}${startRow}:${endColumn}${startRow}`;
+        const dataRangeAddress = `${startColumn}${startRow + 1}:${endColumn}${startRow + rows.length}`;
+        
+        console.log('Insertion details:', {
+          startColumn,
+          startRow,
+          endColumn,
+          headerRangeAddress,
+          dataRangeAddress,
+          headersCount: headers.length,
+          rowsCount: rows.length
+        });
         
         // Insert headers
-        const headerRange = sheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
+        const headerRange = sheet.getRange(headerRangeAddress);
         headerRange.values = [headers];
         
         // Insert data
         if (rows.length > 0) {
-          const dataRange = sheet.getRange(`A2:${String.fromCharCode(64 + headers.length)}${rows.length + 1}`);
+          const dataRange = sheet.getRange(dataRangeAddress);
           dataRange.values = rows;
         }
         
@@ -165,16 +253,17 @@ const MarketDataPage: React.FC = () => {
         headerRange.format.fill.color = '#2E7D32';
         headerRange.format.font.color = 'white';
         
-        // Auto-fit columns
-        sheet.getUsedRange().format.autofitColumns();
+        // Auto-fit columns in the range
+        const fullRange = sheet.getRange(`${startColumn}${startRow}:${endColumn}${startRow + rows.length}`);
+        fullRange.format.autofitColumns();
         
         await context.sync();
       });
       
-      alert(`Successfully inserted ${data.length} market data records into Excel!`);
+      showNotification(`Successfully inserted ${data.length} market data records into Excel starting at selected cell!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
-      alert('Error inserting data into Excel');
+      showNotification(`Error inserting data into Excel: ${error.message}`, 'error');
     }
   };
 
@@ -227,22 +316,26 @@ const MarketDataPage: React.FC = () => {
           </Typography>
         )}
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="Start Date"
-          type="date"
           value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          onChange={(newValue) => setStartDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
+          }}
         />
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="End Date"
-          type="date"
           value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          onChange={(newValue) => setEndDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
+          }}
         />
 
         <Button
@@ -256,6 +349,22 @@ const MarketDataPage: React.FC = () => {
           {loading ? 'Downloading...' : 'Download Market Data'}
         </Button>
       </Stack>
+
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification.severity}
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
