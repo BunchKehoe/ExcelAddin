@@ -1,0 +1,12 @@
+# Ignore all certificate files to prevent accidental commits of sensitive data
+*.pem
+*.crt
+*.key
+*.p12
+*.pfx
+*.der
+
+# Allow README and example files
+!README.md
+!*.example
+!.gitignore

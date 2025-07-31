@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 import requests
 from flask import Blueprint, jsonify, request
 
+from src.infrastructure.config.app_config import AppConfig
+
 logger = logging.getLogger(__name__)
 
 # Create blueprint
@@ -89,7 +91,12 @@ def upload_data():
         }
         
         # Forward to NiFi endpoint
-        nifi_endpoint = 'https://server-vs81t.intranet.local:8443/nifi/api/excel-addin-upload'
+        nifi_endpoint = AppConfig.NIFI_ENDPOINT
+        ssl_config = AppConfig.get_nifi_ssl_config()
+        
+        logger.info(f"Forwarding data to NiFi endpoint: {nifi_endpoint}")
+        logger.debug(f"SSL configuration: verify={ssl_config.get('verify', 'default')}, "
+                    f"client_cert={'configured' if ssl_config.get('cert') else 'not configured'}")
         
         try:
             response = requests.post(
@@ -100,7 +107,7 @@ def upload_data():
                     'X-Forwarded-From': 'excel-addin-backend'
                 },
                 timeout=30,
-                verify=False  # NiFi may use self-signed certificates
+                **ssl_config  # Apply SSL configuration (verify, cert)
             )
             
             if response.status_code == 200 or response.status_code == 201:
@@ -120,6 +127,15 @@ def upload_data():
                     'details': response.text[:500] if response.text else None
                 }), 502
                 
+        except requests.exceptions.SSLError as e:
+            logger.error(f"SSL error when connecting to NiFi endpoint: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': 'SSL certificate verification failed when connecting to NiFi',
+                'details': 'Check certificate configuration in backend/certificates/ directory',
+                'ssl_error': str(e)
+            }), 502
+            
         except requests.exceptions.Timeout:
             logger.error("Timeout when connecting to NiFi endpoint")
             return jsonify({
