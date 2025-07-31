@@ -15,8 +15,6 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import 'dayjs/locale/de';
 import theme from '../theme';
 
-// @ts-ignore
-import PCAGLogo from '../assets/PCAG_white_trans.png';
 import DatabasePage from './pages/DatabasePage';
 import MarketDataPage from './pages/MarketDataPage';
 import ApplicationsPage from './pages/ApplicationsPage';
@@ -105,12 +103,6 @@ const App: React.FC = () => {
         <AppBar position="static">
           <Toolbar sx={{ minHeight: 65 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-              <Box
-                component="img"
-                src={PCAGLogo}
-                alt="Prime Capital Logo"
-                sx={{ height: 40, mr: 2 }}
-              />
               <Typography variant="h6" component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <Box component="span" sx={{ fontWeight: 'bold' }}>
                   Excel
