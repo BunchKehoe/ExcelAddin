@@ -207,24 +207,35 @@ const DatabasePage: React.FC = () => {
         const worksheetName = selectedCategory || 'RawData';
         let sheet;
         
+        console.log('Attempting to work with worksheet:', worksheetName);
+        
         try {
           // Try to get existing worksheet
           sheet = context.workbook.worksheets.getItem(worksheetName);
+          console.log('Found existing worksheet:', worksheetName);
+          
           // Clear existing content if it exists
           try {
             const usedRange = sheet.getUsedRange();
             usedRange.clear();
+            console.log('Cleared existing content from worksheet');
           } catch (rangeError) {
             // No used range to clear (empty worksheet), continue
             console.log('No used range to clear in existing worksheet');
           }
         } catch (error) {
           // Worksheet doesn't exist, create new one
+          console.log('Worksheet does not exist, creating new one:', worksheetName);
           sheet = context.workbook.worksheets.add(worksheetName);
+          console.log('Successfully created new worksheet:', worksheetName);
         }
+        
+        // Sync changes before activating
+        await context.sync();
         
         // Activate the sheet
         sheet.activate();
+        console.log('Activated worksheet:', worksheetName);
         
         if (data.length === 0) {
           showNotification('No data to insert', 'warning');
