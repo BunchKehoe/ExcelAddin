@@ -30,7 +30,7 @@ const DatabasePage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [fundFilteringAvailable, setFundFilteringAvailable] = useState<boolean>(true);
-  
+
   // Notification state
   const [notification, setNotification] = useState<{
     open: boolean;
@@ -103,7 +103,7 @@ const DatabasePage: React.FC = () => {
     setFunds([]); // Clear funds
     setFundFilteringAvailable(true); // Reset fund filtering availability
     setError('');
-    
+
     if (category) {
       loadFunds(category);
     }
@@ -126,7 +126,7 @@ const DatabasePage: React.FC = () => {
 
     setLoading(true);
     setError('');
-    
+
     try {
       const requestData: any = {
         catalog: selectedCategory,
@@ -140,14 +140,14 @@ const DatabasePage: React.FC = () => {
       }
 
       const data = await downloadRawData(requestData);
-      
+
       if (data.success) {
         // Insert data into Excel with preserved column order
         await insertDataIntoExcel(data.data, data.columns);
       } else {
         setError(data.error || 'Failed to download data');
       }
-      
+
     } catch (error) {
       console.error('Error downloading data:', error);
       setError('Error downloading data from backend');
@@ -206,51 +206,40 @@ const DatabasePage: React.FC = () => {
         // Create or get a worksheet with the catalog name
         const worksheetName = selectedCategory || 'RawData';
         let sheet;
-        let worksheetExists = false;
-        
+
         console.log('Attempting to work with worksheet:', worksheetName);
-        
-        // First, check if the worksheet exists by loading all worksheets
-        const worksheets = context.workbook.worksheets;
-        worksheets.load("items/name");
-        await context.sync();
-        
-        // Check if worksheet with the name exists
-        for (let i = 0; i < worksheets.items.length; i++) {
-          if (worksheets.items[i].name === worksheetName) {
-            worksheetExists = true;
-            sheet = worksheets.items[i];
-            console.log('Found existing worksheet:', worksheetName);
-            break;
-          }
-        }
-        
-        if (!worksheetExists) {
-          // Worksheet doesn't exist, create new one
-          console.log('Worksheet does not exist, creating new one:', worksheetName);
-          sheet = context.workbook.worksheets.add(worksheetName);
-          console.log('Successfully created new worksheet:', worksheetName);
+
+        try {
+          // Try to get existing worksheet
+          sheet = context.workbook.worksheets.getItem(worksheetName);
+
           await context.sync();
-        } else {
+
+          console.log('Found existing worksheet:', worksheetName);
+
           // Clear existing content if it exists
           try {
             const usedRange = sheet.getUsedRange();
-            usedRange.load("address");
-            await context.sync();
             usedRange.clear();
             console.log('Cleared existing content from worksheet');
-            await context.sync();
           } catch (rangeError) {
             // No used range to clear (empty worksheet), continue
             console.log('No used range to clear in existing worksheet');
           }
+        } catch (error) {
+          // Worksheet doesn't exist, create new one
+          console.log('Worksheet does not exist, creating new one:', worksheetName);
+          sheet = context.workbook.worksheets.add(worksheetName);
+          console.log('Successfully created new worksheet:', worksheetName);
         }
-        
+
+        // Sync changes before activating
+        await context.sync();
+
         // Activate the sheet
         sheet.activate();
         console.log('Activated worksheet:', worksheetName);
-        await context.sync();
-        
+
         if (data.length === 0) {
           showNotification('No data to insert', 'warning');
           return;
@@ -259,36 +248,36 @@ const DatabasePage: React.FC = () => {
         // Use provided column order or fall back to Object.keys()
         const headers = columns && columns.length > 0 ? columns : Object.keys(data[0]);
         console.log('Headers (with preserved order):', headers);
-        
+
         // Clean and prepare data rows
-        const rows = data.map(row => 
+        const rows = data.map(row =>
           headers.map(header => cleanDataForExcel(row[header]))
         );
-        
+
         console.log('Cleaned rows sample:', rows[0]);
-        
+
         // Calculate Excel column range properly
         const lastColumn = getExcelColumnName(headers.length);
         const headerRangeAddress = `A1:${lastColumn}1`;
         const dataRangeAddress = `A2:${lastColumn}${rows.length + 1}`;
-        
+
         console.log('Range addresses:', { headerRangeAddress, dataRangeAddress });
-        
+
         // Insert headers
         const headerRange = sheet.getRange(headerRangeAddress);
         headerRange.values = [headers];
-        
+
         // Insert data
         if (rows.length > 0) {
           const dataRange = sheet.getRange(dataRangeAddress);
           dataRange.values = rows;
         }
-        
+
         // Format headers
         headerRange.format.font.bold = true;
         headerRange.format.fill.color = '#4472C4';
         headerRange.format.font.color = 'white';
-        
+
         // Auto-fit columns if there's data
         try {
           const usedRange = sheet.getUsedRange();
@@ -297,10 +286,10 @@ const DatabasePage: React.FC = () => {
           // No used range to format (shouldn't happen since we just added data)
           console.log('No used range to auto-fit');
         }
-        
+
         await context.sync();
       });
-      
+
       showNotification(`Successfully inserted ${data.length} records into Excel sheet "${selectedCategory}"!`, 'success');
     } catch (error) {
       console.error('Error inserting data into Excel:', error);
@@ -318,13 +307,13 @@ const DatabasePage: React.FC = () => {
       <Typography variant="h4" component="h1" gutterBottom align="center">
         Raw Database Tables
       </Typography>
-      
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
-      
+
       <Stack spacing={3} sx={{ mt: 4 }}>
         <FormControl fullWidth>
           <InputLabel>Select Category</InputLabel>
