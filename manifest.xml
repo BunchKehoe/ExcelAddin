@@ -58,6 +58,19 @@
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          <!-- Custom Functions -->
+          <ExtensionPoint xsi:type="CustomFunctions">
+            <Script>
+              <SourceLocation resid="Commands.Url"/>
+            </Script>
+            <Page>
+              <SourceLocation resid="Commands.Url"/>
+            </Page>
+            <Metadata>
+              <SourceLocation resid="Commands.Url"/>
+            </Metadata>
+            <Namespace resid="CustomFunctions.Namespace"/>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -76,6 +89,7 @@
         <bt:String id="GetStarted.Title" DefaultValue="Get started with PrimeExcelence"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="PrimeExcelence"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Taskpane"/>
+        <bt:String id="CustomFunctions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>

@@ -20,14 +20,17 @@ import MarketDataPage from './pages/MarketDataPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import DashboardsPage from './pages/DashboardsPage';
 import ExcelFunctionsPage from './pages/ExcelFunctionsPage';
+import DataUploadPage from './pages/DataUploadPage';
 
-type Page = 'home' | 'database' | 'market-data' | 'applications' | 'dashboards' | 'excel-functions';
+type Page = 'home' | 'data-upload' | 'database' | 'market-data' | 'applications' | 'dashboards' | 'excel-functions';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('home');
 
   const renderPage = () => {
     switch (currentPage) {
+      case 'data-upload':
+        return <DataUploadPage />;
       case 'database':
         return <DatabasePage />;
       case 'market-data':
@@ -53,9 +56,17 @@ const App: React.FC = () => {
                 variant="contained"
                 fullWidth
                 size="large"
+                onClick={() => setCurrentPage('data-upload')}
+              >
+                Data Upload
+              </Button>
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
                 onClick={() => setCurrentPage('database')}
               >
-                Raw Admin Data
+                Raw Data
               </Button>
               <Button
                 variant="contained"
