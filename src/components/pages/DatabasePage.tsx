@@ -210,8 +210,14 @@ const DatabasePage: React.FC = () => {
         try {
           // Try to get existing worksheet
           sheet = context.workbook.worksheets.getItem(worksheetName);
-          // Clear existing content
-          sheet.getUsedRange().clear();
+          // Clear existing content if it exists
+          try {
+            const usedRange = sheet.getUsedRange();
+            usedRange.clear();
+          } catch (rangeError) {
+            // No used range to clear (empty worksheet), continue
+            console.log('No used range to clear in existing worksheet');
+          }
         } catch (error) {
           // Worksheet doesn't exist, create new one
           sheet = context.workbook.worksheets.add(worksheetName);
@@ -258,8 +264,14 @@ const DatabasePage: React.FC = () => {
         headerRange.format.fill.color = '#4472C4';
         headerRange.format.font.color = 'white';
         
-        // Auto-fit columns
-        sheet.getUsedRange().format.autofitColumns();
+        // Auto-fit columns if there's data
+        try {
+          const usedRange = sheet.getUsedRange();
+          usedRange.format.autofitColumns();
+        } catch (rangeError) {
+          // No used range to format (shouldn't happen since we just added data)
+          console.log('No used range to auto-fit');
+        }
         
         await context.sync();
       });
