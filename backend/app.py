@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from src.infrastructure.config.app_config import AppConfig
 from src.presentation.controllers.raw_data_controller import raw_data_bp
 from src.presentation.controllers.market_data_controller import market_data_bp
+from src.presentation.controllers.data_upload_controller import data_upload_bp
 
 
 def create_app() -> Flask:
@@ -31,6 +32,7 @@ def create_app() -> Flask:
     # Register blueprints
     app.register_blueprint(raw_data_bp)
     app.register_blueprint(market_data_bp)
+    app.register_blueprint(data_upload_bp)
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -55,7 +57,10 @@ def create_app() -> Flask:
                 '/api/raw-data/download',
                 '/api/market-data/securities',
                 '/api/market-data/fields/<security>',
-                '/api/market-data/download'
+                '/api/market-data/download',
+                '/api/data-upload/upload',
+                '/api/data-upload/types',
+                '/api/data-upload/status/<upload_id>'
             ]
         })
     

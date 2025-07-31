@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
+import { uploadData } from '../api/apiClient';
 
 const DataUploadPage: React.FC = () => {
   const [dataUploadType, setDataUploadType] = useState<string>('');
@@ -150,14 +151,34 @@ const DataUploadPage: React.FC = () => {
           data: jsonData
         };
 
-        // Here you would normally send to the NiFi endpoint
-        // For now, we'll just log it and show a success message
-        console.log('Upload payload:', uploadPayload);
-        
-        // Simulated API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        showNotification(`Successfully uploaded ${jsonData.length} records to NiFi endpoint!`, 'success');
+        // Send to backend upload endpoint which will forward to NiFi
+        try {
+          const response = await uploadData(uploadPayload);
+          
+          if (response.success) {
+            showNotification(
+              `Successfully uploaded ${response.record_count} records to ${response.data_type}!`, 
+              'success'
+            );
+          } else {
+            showNotification(
+              `Upload failed: ${response.error}`, 
+              'error'
+            );
+          }
+        } catch (apiError: any) {
+          console.error('Upload API error:', apiError);
+          
+          // Extract error message from API response
+          let errorMessage = 'Upload failed due to server error';
+          if (apiError.response?.data?.error) {
+            errorMessage = apiError.response.data.error;
+          } else if (apiError.message) {
+            errorMessage = apiError.message;
+          }
+          
+          showNotification(errorMessage, 'error');
+        }
       });
     } catch (error) {
       console.error('Error uploading data:', error);
