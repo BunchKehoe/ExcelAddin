@@ -16,6 +16,8 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import { getMarketDataSecurities, getMarketDataFields, downloadMarketData } from '../api/apiClient';
 
 const MarketDataPage: React.FC = () => {
@@ -23,8 +25,8 @@ const MarketDataPage: React.FC = () => {
   const [fields, setFields] = useState<string[]>([]);
   const [selectedSecurity, setSelectedSecurity] = useState<string>('');
   const [selectedField, setSelectedField] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<Dayjs | null>(null);
+  const [endDate, setEndDate] = useState<Dayjs | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   
@@ -120,8 +122,8 @@ const MarketDataPage: React.FC = () => {
       const data = await downloadMarketData({
         security: selectedSecurity,
         field: selectedField,
-        start_date: startDate,
-        end_date: endDate
+        start_date: startDate.format('YYYY-MM-DD'),
+        end_date: endDate.format('YYYY-MM-DD')
       });
       
       if (data.success) {
@@ -314,29 +316,25 @@ const MarketDataPage: React.FC = () => {
           </Typography>
         )}
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="Start Date"
-          type="date"
           value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          inputProps={{
-            pattern: "\\d{4}-\\d{2}-\\d{2}",
-            placeholder: "YYYY-MM-DD"
+          onChange={(newValue) => setStartDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
           }}
         />
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="End Date"
-          type="date"
           value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          inputProps={{
-            pattern: "\\d{4}-\\d{2}-\\d{2}",
-            placeholder: "YYYY-MM-DD"
+          onChange={(newValue) => setEndDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
           }}
         />
 

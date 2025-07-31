@@ -16,6 +16,8 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import { getRawDataCategories, getRawDataFunds, downloadRawData } from '../api/apiClient';
 
 const DatabasePage: React.FC = () => {
@@ -23,8 +25,8 @@ const DatabasePage: React.FC = () => {
   const [funds, setFunds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedFund, setSelectedFund] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<Dayjs | null>(null);
+  const [endDate, setEndDate] = useState<Dayjs | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [fundFilteringAvailable, setFundFilteringAvailable] = useState<boolean>(true);
@@ -128,8 +130,8 @@ const DatabasePage: React.FC = () => {
     try {
       const requestData: any = {
         catalog: selectedCategory,
-        start_date: startDate,
-        end_date: endDate
+        start_date: startDate.format('YYYY-MM-DD'),
+        end_date: endDate.format('YYYY-MM-DD')
       };
 
       // Only include fund if filtering is available
@@ -331,29 +333,25 @@ const DatabasePage: React.FC = () => {
           </Typography>
         )}
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="Delivery Start"
-          type="date"
           value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          inputProps={{
-            pattern: "\\d{4}-\\d{2}-\\d{2}",
-            placeholder: "YYYY-MM-DD"
+          onChange={(newValue) => setStartDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
           }}
         />
 
-        <TextField
-          fullWidth
+        <DatePicker
           label="Delivery End"
-          type="date"
           value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          inputProps={{
-            pattern: "\\d{4}-\\d{2}-\\d{2}",
-            placeholder: "YYYY-MM-DD"
+          onChange={(newValue) => setEndDate(newValue)}
+          slotProps={{
+            textField: {
+              fullWidth: true
+            }
           }}
         />
 

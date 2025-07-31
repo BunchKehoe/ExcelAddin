@@ -10,6 +10,9 @@ import {
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import 'dayjs/locale/de';
 
 import DatabasePage from './pages/DatabasePage';
 import MarketDataPage from './pages/MarketDataPage';
@@ -104,24 +107,26 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box sx={{ flexGrow: 1 }}>
-        <AppBar position="static">
-          <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              PrimeExcelence
-            </Typography>
-            {currentPage !== 'home' && (
-              <Button color="inherit" onClick={() => setCurrentPage('home')}>
-                Home
-              </Button>
-            )}
-          </Toolbar>
-        </AppBar>
-        <Box sx={{ minHeight: 'calc(100vh - 64px)' }}>
-          {renderPage()}
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="de">
+        <CssBaseline />
+        <Box sx={{ flexGrow: 1 }}>
+          <AppBar position="static">
+            <Toolbar>
+              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                PrimeExcelence
+              </Typography>
+              {currentPage !== 'home' && (
+                <Button color="inherit" onClick={() => setCurrentPage('home')}>
+                  Home
+                </Button>
+              )}
+            </Toolbar>
+          </AppBar>
+          <Box sx={{ minHeight: 'calc(100vh - 64px)' }}>
+            {renderPage()}
+          </Box>
         </Box>
-      </Box>
+      </LocalizationProvider>
     </ThemeProvider>
   );
 };
