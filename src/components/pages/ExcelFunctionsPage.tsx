@@ -23,13 +23,18 @@ const ExcelFunctionsPage: React.FC = () => {
     },
     {
       title: 'Aggregate IRR',
-      description: 'This function calculates aggregate IRR',
-      details: 'Calculate the Internal Rate of Return (IRR) for a portfolio or aggregate of investments. This function takes cash flows and dates to compute the annualized return rate that makes the net present value equal to zero.'
+      description: '=PC.AGGIRR(expected_future_value, original_beginning_value)',
+      details: 'Calculate the Internal Rate of Return (IRR) for a portfolio or aggregate of investments. This function takes the expected future value and original beginning value, then divides the former by the latter to compute the aggregate return rate.'
     },
     {
       title: 'Weighted IRR',
       description: 'This Function calculates Weighted IRR',
       details: 'Calculate the Weighted Internal Rate of Return for multiple investments or portfolios. This function considers the relative size or importance of each investment when computing the overall return rate.'
+    },
+    {
+      title: 'Join Cells',
+      description: '=PC.JOINCELLS(range, [delimiter])',
+      details: 'Transform a range of cells into a single delimited string. Takes a range like A1:A23 and an optional delimiter (default is comma), then combines all cell values into a single string separated by the delimiter, e.g., "A1, A2, A3, ..."'
     }
   ];
 

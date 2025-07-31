@@ -6,6 +6,10 @@ from flask_cors import CORS
 import logging
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add the src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -13,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from src.infrastructure.config.app_config import AppConfig
 from src.presentation.controllers.raw_data_controller import raw_data_bp
 from src.presentation.controllers.market_data_controller import market_data_bp
+from src.presentation.controllers.data_upload_controller import data_upload_bp
 
 
 def create_app() -> Flask:
@@ -31,6 +36,7 @@ def create_app() -> Flask:
     # Register blueprints
     app.register_blueprint(raw_data_bp)
     app.register_blueprint(market_data_bp)
+    app.register_blueprint(data_upload_bp)
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -55,7 +61,10 @@ def create_app() -> Flask:
                 '/api/raw-data/download',
                 '/api/market-data/securities',
                 '/api/market-data/fields/<security>',
-                '/api/market-data/download'
+                '/api/market-data/download',
+                '/api/data-upload/upload',
+                '/api/data-upload/types',
+                '/api/data-upload/status/<upload_id>'
             ]
         })
     
@@ -87,6 +96,37 @@ def main():
     logger.info(f"Starting Excel Backend API on {AppConfig.HOST}:{AppConfig.PORT}")
     logger.info(f"Debug mode: {AppConfig.DEBUG}")
     logger.info(f"CORS origins: {AppConfig.CORS_ORIGINS}")
+    
+    # Log SSL configuration for NiFi
+    logger.info(f"NiFi endpoint: {AppConfig.NIFI_ENDPOINT}")
+    logger.info(f"NiFi SSL verification: {AppConfig.NIFI_VERIFY_SSL}")
+    
+    ssl_config = AppConfig.get_nifi_ssl_config()
+    if AppConfig.NIFI_VERIFY_SSL:
+        verify_setting = ssl_config.get('verify', 'system default')
+        cert_setting = ssl_config.get('cert', 'not configured')
+        logger.info(f"NiFi SSL verify setting: {verify_setting}")
+        logger.info(f"NiFi client certificate: {cert_setting}")
+        
+        # Check certificate file existence
+        certificates_path = AppConfig.get_certificates_path()
+        logger.info(f"Certificates directory: {certificates_path}")
+        
+        if AppConfig.NIFI_CA_CERT_PATH:
+            ca_cert_path = os.path.join(certificates_path, AppConfig.NIFI_CA_CERT_PATH)
+            if os.path.exists(ca_cert_path):
+                logger.info(f"CA certificate found: {ca_cert_path}")
+            else:
+                logger.warning(f"CA certificate not found: {ca_cert_path}")
+        
+        if AppConfig.NIFI_CLIENT_CERT_PATH:
+            client_cert_path = os.path.join(certificates_path, AppConfig.NIFI_CLIENT_CERT_PATH)
+            if os.path.exists(client_cert_path):
+                logger.info(f"Client certificate found: {client_cert_path}")
+            else:
+                logger.warning(f"Client certificate not found: {client_cert_path}")
+    else:
+        logger.warning("SSL verification is DISABLED for NiFi connections - not recommended for production")
     
     app.run(
         host=AppConfig.HOST,

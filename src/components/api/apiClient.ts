@@ -31,6 +31,13 @@ interface MarketDataDownloadParams {
   end_date: string;
 }
 
+interface DataUploadParams {
+  dataType: string;
+  skipDuplicateCheck: boolean;
+  deliveryDate?: string;
+  data: any[];
+}
+
 // Raw Data Endpoints
 export const getRawDataCategories = async () => {
   try {
@@ -86,6 +93,37 @@ export const getMarketDataFields = async (security: string) => {
 export const downloadMarketData = async (params: MarketDataDownloadParams) => {
   try {
     const response = await apiClient.post('/market-data/download', params);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+// Data Upload Endpoints
+export const uploadData = async (params: DataUploadParams) => {
+  try {
+    const response = await apiClient.post('/data-upload/upload', params);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const getDataUploadTypes = async () => {
+  try {
+    const response = await apiClient.get('/data-upload/types');
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const getUploadStatus = async (uploadId: string) => {
+  try {
+    const response = await apiClient.get(`/data-upload/status/${uploadId}`);
     return response.data;
   } catch (error) {
     console.error('API Error:', error);
