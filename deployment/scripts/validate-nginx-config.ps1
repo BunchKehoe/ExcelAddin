@@ -111,6 +111,18 @@ if (Test-Path "$NginxPath\nginx.exe") {
         } else {
             $errors += "nginx configuration syntax error: $result"
         }
+        
+        # Check for common nginx warnings in the configuration
+        $configContent = Get-Content "$NginxPath\conf\excel-addin.conf" -Raw -ErrorAction SilentlyContinue
+        if ($configContent) {
+            if ($configContent -match "listen.*http2" -and $configContent -notmatch "http2 on") {
+                $warnings += "Configuration may still use deprecated 'listen ... http2' syntax. Update to use 'http2 on;' directive."
+            }
+            
+            if ($configContent -match "ssl_stapling on" -and $configContent -notmatch "#.*ssl_stapling") {
+                $warnings += "SSL stapling is enabled but may cause warnings with company certificates. Consider disabling if certificate lacks OCSP responder."
+            }
+        }
     } catch {
         $warnings += "Could not test nginx configuration: $_"
     }
@@ -176,6 +188,11 @@ if ($errors.Count -gt 0) {
     Write-Host "2. Address any warnings if applicable" -ForegroundColor Yellow
     Write-Host "3. Proceed with the deployment using deploy-windows.ps1" -ForegroundColor Green
 }
+
+Write-Host "`nCOMMON NGINX WARNINGS AND FIXES:" -ForegroundColor Cyan
+Write-Host "• HTTP/2 deprecation warning: Fixed in current config using 'http2 on;' directive"
+Write-Host "• SSL stapling warning: Disabled for company certificates without OCSP responder"
+Write-Host "• Master process alert: Try using nginx.conf.windows.template for Windows optimizations"
 
 Write-Host "`nFor detailed setup instructions, see:" -ForegroundColor Cyan
 Write-Host "• CERTIFICATE_SETUP.md - SSL certificate configuration"

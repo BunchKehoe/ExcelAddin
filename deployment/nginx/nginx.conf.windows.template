@@ -4,6 +4,10 @@
 #user  nobody;
 worker_processes  auto;
 
+# Windows-specific optimizations
+worker_priority  0;
+worker_rlimit_nofile  65535;
+
 #error_log  logs/error.log;
 #error_log  logs/error.log  notice;
 #error_log  logs/error.log  info;
@@ -12,6 +16,10 @@ worker_processes  auto;
 
 events {
     worker_connections  1024;
+    # Windows-specific: use select method for better stability
+    use select;
+    # Reduce timeouts for Windows
+    accept_mutex_delay 500ms;
 }
 
 http {
