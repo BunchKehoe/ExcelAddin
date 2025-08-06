@@ -69,7 +69,8 @@ if (-not $UpdateOnly) {
 # Build frontend
 Write-Host "Building frontend..." -ForegroundColor Yellow
 if (Test-Path "package.json") {
-    npm run build
+    # Use staging build which includes custom functions metadata generation
+    npm run build:staging
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Frontend build failed"
         exit 1
