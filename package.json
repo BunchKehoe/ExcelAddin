@@ -20,7 +20,8 @@
     "cert:verify": "office-addin-dev-certs verify",
     "cert:uninstall": "office-addin-dev-certs uninstall",
     "serve:prod": "npx http-server dist -p 3000 -S -C localhost.pem -K localhost-key.pem",
-    "analyze": "webpack-bundle-analyzer dist/",
+    "analyze": "webpack --mode production --env analyze && webpack-bundle-analyzer dist/ --port 8888 --no-open",
+    "analyze:build": "npm run build && npm run analyze",
     "deploy:prepare": "npm run clean && npm install && npm run build:staging",
     "deploy:windows": "powershell -ExecutionPolicy Bypass -File deployment/scripts/deploy-windows.ps1",
     "health:check": "powershell -ExecutionPolicy Bypass -File deployment/monitoring/health-check.ps1",
@@ -40,8 +41,7 @@
     "dayjs": "^1.11.13",
     "@microsoft/office-js": "^1.1.110",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "recharts": "^3.1.2"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@types/react": "^19.1.9",
@@ -54,6 +54,7 @@
     "ts-loader": "^9.5.2",
     "typescript": "^5.9.2",
     "webpack": "^5.101.0",
+    "webpack-bundle-analyzer": "^4.10.2",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.2"
   }

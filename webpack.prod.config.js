@@ -99,11 +99,37 @@ module.exports = (env, argv) => {
     optimization: {
       splitChunks: isProduction ? {
         chunks: 'all',
+        minSize: 20000,
+        maxSize: 200000,
         cacheGroups: {
           vendor: {
             test: /[\\/]node_modules[\\/]/,
             name: 'vendors',
             chunks: 'all',
+            priority: 10,
+          },
+          mui: {
+            test: /[\\/]node_modules[\\/]@mui[\\/]/,
+            name: 'mui',
+            chunks: 'all',
+            priority: 20,
+          },
+          react: {
+            test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+            name: 'react',
+            chunks: 'all',
+            priority: 20,
+          },
+          recharts: {
+            test: /[\\/]node_modules[\\/]recharts[\\/]/,
+            name: 'recharts',
+            chunks: 'all',
+            priority: 20,
+          },
+          common: {
+            minChunks: 2,
+            priority: 5,
+            reuseExistingChunk: true,
           },
         },
       } : false,
@@ -132,8 +158,8 @@ module.exports = (env, argv) => {
     // Performance hints for production builds
     performance: {
       hints: isProduction ? 'warning' : false,
-      maxAssetSize: 1024 * 1024, // 1MB
-      maxEntrypointSize: 1024 * 1024 // 1MB
+      maxAssetSize: 500 * 1024, // 500KB (increased from 1MB)
+      maxEntrypointSize: 500 * 1024 // 500KB (increased from 1MB)
     },
     // Source maps for debugging
     devtool: isProduction ? false : 'eval-source-map'

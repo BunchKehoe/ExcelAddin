@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -6,21 +6,22 @@ import {
   Container,
   Button,
   Stack,
-  Box
+  Box,
+  CircularProgress
 } from '@mui/material';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import 'dayjs/locale/de';
 import theme from '../theme';
 
-import DatabasePage from './pages/DatabasePage';
-import MarketDataPage from './pages/MarketDataPage';
-import ApplicationsPage from './pages/ApplicationsPage';
-import DashboardsPage from './pages/DashboardsPage';
-import ExcelFunctionsPage from './pages/ExcelFunctionsPage';
-import DataUploadPage from './pages/DataUploadPage';
+// Lazy load page components to reduce initial bundle size
+const DatabasePage = lazy(() => import('./pages/DatabasePage'));
+const MarketDataPage = lazy(() => import('./pages/MarketDataPage'));
+const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage'));
+const DashboardsPage = lazy(() => import('./pages/DashboardsPage'));
+const ExcelFunctionsPage = lazy(() => import('./pages/ExcelFunctionsPage'));
+const DataUploadPage = lazy(() => import('./pages/DataUploadPage'));
 
 type Page = 'home' | 'data-upload' | 'database' | 'market-data' | 'applications' | 'dashboards' | 'excel-functions';
 
@@ -30,17 +31,41 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (currentPage) {
       case 'data-upload':
-        return <DataUploadPage />;
+        return (
+          <Suspense fallback={<Container><CircularProgress /></Container>}>
+            <DataUploadPage />
+          </Suspense>
+        );
       case 'database':
-        return <DatabasePage />;
+        return (
+          <Suspense fallback={<Container><CircularProgress /></Container>}>
+            <DatabasePage />
+          </Suspense>
+        );
       case 'market-data':
-        return <MarketDataPage />;
+        return (
+          <Suspense fallback={<Container><CircularProgress /></Container>}>
+            <MarketDataPage />
+          </Suspense>
+        );
       case 'applications':
-        return <ApplicationsPage />;
+        return (
+          <Suspense fallback={<Container><CircularProgress /></Container>}>
+            <ApplicationsPage />
+          </Suspense>
+        );
       case 'dashboards':
-        return <DashboardsPage />;
+        return (
+          <Suspense fallback={<Container><CircularProgress /></Container>}>
+            <DashboardsPage />
+          </Suspense>
+        );
       case 'excel-functions':
-        return <ExcelFunctionsPage />;
+        return (
+          <Suspense fallback={<Container><CircularProgress /></Container>}>
+            <ExcelFunctionsPage />
+          </Suspense>
+        );
       default:
         return (
           <Container maxWidth="sm" sx={{ mt: 4 }}>
@@ -108,7 +133,7 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider theme={theme}>
-    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="de">
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
       <CssBaseline />
       <Box sx={{ flexGrow: 1 }}>
         <AppBar position="static">
