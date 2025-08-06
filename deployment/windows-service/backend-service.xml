@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Windows Service configuration for Excel Add-in Backend -->
+<!-- To be used with NSSM (Non-Sucking Service Manager) -->
+<service>
+    <name>ExcelAddinBackend</name>
+    <displayName>Excel Add-in Backend Service</displayName>
+    <description>Python Flask backend service for Excel Add-in</description>
+    <executable>python.exe</executable>
+    <arguments>run.py</arguments>
+    <workingDirectory>C:\inetpub\wwwroot\ExcelAddin\backend</workingDirectory>
+    <startMode>Automatic</startMode>
+    <delayedStart>false</delayedStart>
+    <dependsOn>
+        <service>nginx</service>
+    </dependsOn>
+    <recovery>
+        <action>restart</action>
+        <delay>60000</delay>
+    </recovery>
+    <logFile>C:\Logs\ExcelAddin\backend-service.log</logFile>
+    <errorFile>C:\Logs\ExcelAddin\backend-error.log</errorFile>
+    <environment>
+        <variable name="FLASK_ENV">production</variable>
+        <variable name="DEBUG">false</variable>
+        <variable name="HOST">127.0.0.1</variable>
+        <variable name="PORT">5000</variable>
+        <variable name="PYTHONPATH">C:\inetpub\wwwroot\ExcelAddin\backend</variable>
+    </environment>
+</service>
