@@ -1,6 +1,95 @@
 # SSL Certificate Setup for Excel Add-in on Windows Server
 # This guide covers different SSL certificate setup options
 
+## Company Certificate Setup (Recommended for Production)
+
+If you have company certificates located in `C:\Cert\`:
+- Root CA certificate: `cacert.pem` (company root CA in .cer and .pem format)
+- Server certificate: `server.crt` and `server.key` OR `server.pfx`
+
+### Using Separate Certificate Files (.crt and .key)
+```nginx
+# nginx SSL configuration in excel-addin.conf
+ssl_certificate C:/Cert/server.crt;
+ssl_certificate_key C:/Cert/server.key;
+ssl_trusted_certificate C:/Cert/cacert.pem;
+```
+
+### Using .pfx Certificate File
+If you have a .pfx file, extract the certificate and key:
+
+```powershell
+# Extract certificate from .pfx file
+openssl pkcs12 -in C:/Cert/server.pfx -out C:/Cert/server.crt -clcerts -nokeys -passin pass:YOUR_PFX_PASSWORD
+
+# Extract private key from .pfx file
+openssl pkcs12 -in C:/Cert/server.pfx -out C:/Cert/server.key -nocerts -nodes -passin pass:YOUR_PFX_PASSWORD
+
+# If openssl is not available on Windows, use PowerShell:
+$pfx = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("C:\Cert\server.pfx", "YOUR_PFX_PASSWORD", "Exportable")
+[System.IO.File]::WriteAllBytes("C:\Cert\server.crt", $pfx.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+# Note: Private key extraction from PowerShell requires additional steps
+```
+
+### Microsoft Add-in Certificate Integration
+
+For production deployment, you need to handle both the server SSL certificates and Excel add-in manifest certificates:
+
+#### 1. Server SSL Certificates (for HTTPS communication)
+- Use your company's server certificate (`server.crt`/`server.key` or `server.pfx`) 
+- This handles browser-to-server HTTPS communication
+- Configure in nginx as shown above
+
+#### 2. Excel Add-in Manifest Certificates (for add-in trust)
+The Microsoft add-in certificates you mentioned are likely for:
+- Code signing the add-in manifest
+- Establishing trust with Office/Excel
+
+**For production, you have several options:**
+
+**Option A: Use Company Root CA (Recommended)**
+If your company root CA is already trusted in your environment:
+1. Generate a new certificate signed by your company CA specifically for the add-in
+2. Update the manifest to reference URLs using your company-signed certificate
+3. No additional client configuration needed if company CA is in Windows trust store
+
+**Option B: Install Microsoft Add-in CA in Production**
+1. Export the Microsoft add-in root CA certificate
+2. Install it in the Windows Certificate Store on all client machines
+3. Use Group Policy to distribute the CA certificate across the organization
+
+**Option C: Use Company-Signed Certificate for Add-in**
+1. Create a new certificate signed by your company CA for the add-in URLs
+2. Update manifest-staging.xml to use production URLs with company certificate
+3. This leverages your existing company trust infrastructure
+
+#### Certificate Trust Chain Setup
+```powershell
+# Install company root CA in Windows Certificate Store (if not already present)
+Import-Certificate -FilePath "C:\Cert\cacert.pem" -CertStoreLocation Cert:\LocalMachine\Root
+
+# Verify certificate chain
+Get-ChildItem -Path Cert:\LocalMachine\Root | Where-Object { $_.Subject -like "*Your Company*" }
+```
+
+#### Manifest Configuration for Production
+Update your manifest-staging.xml to use production URLs:
+```xml
+<!-- All URLs should use your production domain with company certificate -->
+<SourceLocation DefaultValue="https://server01.intranet.local:8443/excellence/taskpane.html"/>
+<SupportUrl DefaultValue="https://server01.intranet.local:8443/excellence/support"/>
+```
+
+### Certificate File Structure for Production
+```
+C:\Cert\
+├── cacert.pem              # Company root CA certificate
+├── server.crt              # Server certificate for HTTPS
+├── server.key              # Server private key
+├── server.pfx              # Alternative: combined certificate file
+└── addin-ca.crt            # Optional: specific add-in CA certificate
+```
+
 ## Option 1: Self-Signed Certificate (Development/Internal Testing Only)
 
 ### Create Self-Signed Certificate using PowerShell
