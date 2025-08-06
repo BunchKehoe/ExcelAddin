@@ -88,6 +88,20 @@ pip install flask flask-cors python-dotenv requests sqlalchemy pyodbc configpars
 
 ## SSL Certificate Setup
 
+**Important**: Before proceeding with the deployment, you must configure SSL certificates properly. 
+
+### Quick Setup for Company Certificates
+
+If you have certificates in `C:\Cert\` (recommended for production):
+- See [CERTIFICATE_SETUP.md](CERTIFICATE_SETUP.md) for complete certificate configuration
+- Use [scripts/extract-pfx.ps1](scripts/extract-pfx.ps1) to extract certificates from .pfx files
+
+### Alternative Certificate Options
+
+For other certificate setups or Let's Encrypt, see [ssl/SSL_SETUP.md](ssl/SSL_SETUP.md).
+
+**Continue with deployment only after SSL certificates are properly configured.**
+
 Choose one of the following methods:
 
 ### Option 1: Commercial Certificate (Recommended for Production)
