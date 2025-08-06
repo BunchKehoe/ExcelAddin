@@ -2,7 +2,179 @@
 
 This guide addresses common nginx warnings and issues specific to Windows Server deployments.
 
-## Common Warnings and Their Solutions
+## CRITICAL ISSUES AND SOLUTIONS
+
+### Issue 1: Process Closes with Master Process Alert
+
+**Problem:**
+nginx process closes immediately with only the warning:
+```
+[alert] the event "ngx_master_*" was not signaled for 5s
+```
+
+**Root Causes:**
+- Windows-specific process synchronization issues
+- nginx daemon mode conflicts with Windows service management
+- Worker process configuration incompatible with Windows
+
+**Solutions:**
+
+#### Solution A: Use Windows-Optimized Configuration (Recommended)
+1. Replace your nginx.conf with the optimized template:
+   ```powershell
+   Copy-Item "deployment\nginx\nginx.conf.windows.template" "C:\nginx\conf\nginx.conf"
+   ```
+
+2. Key optimizations in the template:
+   ```nginx
+   # Single worker for Windows stability
+   worker_processes 1;
+   
+   # Daemon off for service compatibility
+   daemon off;
+   
+   events {
+       use select;           # Windows-compatible event method
+       worker_connections 512;  # Reduced for stability
+       accept_mutex_delay 100ms;
+       accept_mutex on;
+   }
+   ```
+
+#### Solution B: Run nginx as a Windows Service with NSSM
+1. Install NSSM (Non-Sucking Service Manager):
+   ```powershell
+   # Download from https://nssm.cc/
+   # Or use: winget install NSSM.NSSM
+   ```
+
+2. Use the service setup script:
+   ```powershell
+   .\deployment\scripts\setup-nginx-service.ps1 -NginxPath "C:\nginx"
+   ```
+
+3. This automatically configures nginx for service operation with proper Windows compatibility.
+
+### Issue 2: Password Prompt on Startup
+
+**Problem:**
+nginx requests password in CLI on startup for encrypted private key files.
+
+**Root Cause:**
+The SSL private key file (server.key) is encrypted with a password.
+
+**Solutions:**
+
+#### Solution A: Convert to Unencrypted Key (Recommended)
+1. Use the provided script to convert the key:
+   ```powershell
+   .\deployment\scripts\handle-encrypted-key.ps1 -KeyPath "C:\Cert\server.key"
+   ```
+
+2. Update nginx configuration to use the unencrypted key:
+   ```nginx
+   ssl_certificate_key C:/Cert/server-unencrypted.key;
+   ```
+
+#### Solution B: Extract Unencrypted Key from PFX
+If you have a .pfx file:
+1. Extract unencrypted certificate and key:
+   ```powershell
+   .\deployment\scripts\extract-pfx.ps1 -PfxPath "C:\Cert\server.pfx" -OutputDir "C:\Cert"
+   ```
+
+2. Use OpenSSL to ensure key is unencrypted:
+   ```bash
+   openssl rsa -in "C:\Cert\server.key" -out "C:\Cert\server-unencrypted.key"
+   ```
+
+#### Solution C: Generate New Unencrypted Key
+Create a new private key without password:
+```bash
+openssl genrsa -out "C:\Cert\server-new.key" 2048
+```
+
+### Issue 3: nginx with NSSM Service Management
+
+**Problem:**
+Some sources claim nginx cannot be run with NSSM (Non-Sucking Service Manager).
+
+**Truth:** nginx CAN be run with NSSM using proper configuration.
+
+**Solution:**
+
+#### Automated Setup
+Use the provided service setup script:
+```powershell
+.\deployment\scripts\setup-nginx-service.ps1 -NginxPath "C:\nginx" -Force
+```
+
+#### Manual NSSM Configuration
+1. Install the service:
+   ```cmd
+   nssm install nginx "C:\nginx\nginx.exe"
+   nssm set nginx AppDirectory "C:\nginx"
+   nssm set nginx AppParameters "-c C:\nginx\conf\nginx.conf"
+   ```
+
+2. Configure for Windows service compatibility:
+   ```cmd
+   nssm set nginx AppPriority NORMAL_PRIORITY_CLASS
+   nssm set nginx AppNoConsole 1
+   nssm set nginx AppStopMethodConsole 10000
+   nssm set nginx AppStopMethodWindow 10000
+   ```
+
+3. **CRITICAL:** Ensure nginx.conf has `daemon off;` setting:
+   ```nginx
+   # This is essential for NSSM service operation
+   daemon off;
+   ```
+
+4. Start the service:
+   ```powershell
+   Start-Service nginx
+   ```
+
+## COMPREHENSIVE SOLUTION WORKFLOW
+
+### Step 1: Fix Configuration Issues
+```powershell
+# Copy optimized configuration
+Copy-Item "deployment\nginx\nginx.conf.windows.template" "C:\nginx\conf\nginx.conf"
+
+# Test configuration
+C:\nginx\nginx.exe -t
+```
+
+### Step 2: Handle Encrypted Keys
+```powershell
+# Check if key is encrypted
+.\deployment\scripts\handle-encrypted-key.ps1 -KeyPath "C:\Cert\server.key" -TestOnly
+
+# Convert if encrypted
+.\deployment\scripts\handle-encrypted-key.ps1 -KeyPath "C:\Cert\server.key"
+```
+
+### Step 3: Set Up Windows Service
+```powershell
+# Install nginx as Windows service with NSSM
+.\deployment\scripts\setup-nginx-service.ps1 -NginxPath "C:\nginx" -Force
+```
+
+### Step 4: Verify Operation
+```powershell
+# Check service status
+Get-Service nginx
+
+# Test HTTP response
+Invoke-WebRequest "http://127.0.0.1/health"
+
+# Check logs
+Get-Content "C:\Logs\nginx\service-stdout.log" -Tail 20
+```
+
+## LEGACY WARNINGS (Already Fixed in Configuration)
 
 ### 1. Deprecated HTTP/2 Syntax Warning
 

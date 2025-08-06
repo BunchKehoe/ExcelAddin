@@ -85,6 +85,20 @@ if (-not (Test-Path "$CertPath\server.crt") -and (Test-Path "$CertPath\server.pf
     $warnings += "Found server.pfx but no server.crt. Use extract-pfx.ps1 to extract certificate and key files."
 }
 
+# Check for encrypted private keys
+if (Test-Path "$CertPath\server.key") {
+    try {
+        $keyContent = Get-Content "$CertPath\server.key" -Raw
+        if ($keyContent -match "ENCRYPTED|Proc-Type.*ENCRYPTED") {
+            $errors += "Private key is encrypted and will cause nginx to prompt for password. Use handle-encrypted-key.ps1 to convert to unencrypted format."
+        } else {
+            Write-Host "✓ Private key is not encrypted" -ForegroundColor Green
+        }
+    } catch {
+        $warnings += "Could not read private key file to check encryption status"
+    }
+}
+
 # Check directory permissions
 Write-Host "`nChecking directory structure..." -ForegroundColor Yellow
 $directories = @(
@@ -121,6 +135,22 @@ if (Test-Path "$NginxPath\nginx.exe") {
             
             if ($configContent -match "ssl_stapling on" -and $configContent -notmatch "#.*ssl_stapling") {
                 $warnings += "SSL stapling is enabled but may cause warnings with company certificates. Consider disabling if certificate lacks OCSP responder."
+            }
+        }
+        
+        # Check main nginx.conf for Windows compatibility
+        $mainConfigContent = Get-Content "$NginxPath\conf\nginx.conf" -Raw -ErrorAction SilentlyContinue
+        if ($mainConfigContent) {
+            if ($mainConfigContent -match "daemon on" -or $mainConfigContent -notmatch "daemon off") {
+                $warnings += "nginx.conf should have 'daemon off;' for Windows service compatibility with NSSM"
+            }
+            
+            if ($mainConfigContent -match "worker_processes\s+auto") {
+                $warnings += "Consider using 'worker_processes 1;' instead of 'auto' for Windows stability"
+            }
+            
+            if ($mainConfigContent -notmatch "use select") {
+                $warnings += "Consider using 'use select;' in events block for Windows compatibility"
             }
         }
     } catch {
@@ -189,10 +219,16 @@ if ($errors.Count -gt 0) {
     Write-Host "3. Proceed with the deployment using deploy-windows.ps1" -ForegroundColor Green
 }
 
-Write-Host "`nCOMMON NGINX WARNINGS AND FIXES:" -ForegroundColor Cyan
+Write-Host "`nCOMMON NGINX WINDOWS ISSUES AND FIXES:" -ForegroundColor Cyan
+Write-Host "• Process closes immediately: Use nginx.conf.windows.template for Windows optimizations"
+Write-Host "• Password prompt on startup: Use handle-encrypted-key.ps1 to convert encrypted keys"
+Write-Host "• Service management: Use setup-nginx-service.ps1 to configure nginx with NSSM"
 Write-Host "• HTTP/2 deprecation warning: Fixed in current config using 'http2 on;' directive"
 Write-Host "• SSL stapling warning: Disabled for company certificates without OCSP responder"
-Write-Host "• Master process alert: Try using nginx.conf.windows.template for Windows optimizations"
+Write-Host "• Master process alert: Fixed with Windows-specific settings and service configuration"
+
+Write-Host "`nFor immediate solutions to critical issues, see:" -ForegroundColor Cyan
+Write-Host "• NGINX_WINDOWS_QUICK_FIX.md - Immediate solutions for common problems"
 
 Write-Host "`nFor detailed setup instructions, see:" -ForegroundColor Cyan
 Write-Host "• CERTIFICATE_SETUP.md - SSL certificate configuration"
