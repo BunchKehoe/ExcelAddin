@@ -321,15 +321,39 @@ Get-Service ExcelAddinBackend, nginx
 # Test backend API directly
 Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing
 
-# Test through nginx proxy (skipping certificate check for self-signed certs)
-Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
+# Test through nginx proxy - Choose method based on your PowerShell version
+# Check PowerShell version first
+$PSVersionTable.PSVersion
 
-# Test main application
-Invoke-WebRequest -Uri "https://localhost:8443/excellence/" -SkipCertificateCheck -UseBasicParsing
+# For PowerShell 6.0+ (PowerShell Core)
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
+    Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -SkipCertificateCheck -UseBasicParsing
+} else {
+    # For Windows PowerShell 5.1 and earlier - use .NET classes to ignore SSL
+    Write-Host "Using Windows PowerShell - ignoring SSL certificates for testing"
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+    
+    try {
+        Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -UseBasicParsing
+        Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -UseBasicParsing
+        Write-Host "✅ HTTPS endpoints are accessible"
+    } catch {
+        Write-Host "❌ HTTPS connection failed: $($_.Exception.Message)"
+        Write-Host "💡 Check troubleshooting section below"
+    }
+    
+    # Reset certificate validation for security
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+}
 
-# Alternative: Use curl.exe directly (if installed) instead of PowerShell's curl alias
-# curl.exe -k https://localhost:8443/excellence/api/health
-# curl.exe -k https://localhost:8443/excellence/
+# Alternative: Use curl.exe directly (if Git for Windows is installed)
+if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+    Write-Host "Testing with curl.exe..."
+    curl.exe -k -s -o /dev/null -w "%{http_code}" https://localhost:8443/excellence/api/health
+    curl.exe -k -s -o /dev/null -w "%{http_code}" https://localhost:8443/excellence/taskpane.html
+}
 ```
 
 ### Phase 7: Deploy to Excel Users
@@ -436,6 +460,7 @@ openssl rsa -in C:\Cert\server.key -check
 | `setup-backend-service.ps1` | Install/configure backend Windows service | Run once during deployment |
 | `setup-nginx-service.ps1` | Install/configure nginx Windows service | Run once during deployment |
 | `diagnose-backend-service.ps1` | Troubleshoot backend service issues | Use when service fails to start |
+| `diagnose-connectivity.ps1` | **Comprehensive connectivity diagnostics** | **Use when nginx is running but website not accessible** |
 | `validate-nginx-config.ps1` | Test nginx configuration | Use before starting nginx |
 | `handle-encrypted-key.ps1` | Convert encrypted SSL keys | Use if SSL keys require passwords |
 | `extract-pfx.ps1` | Extract certificates from PFX files | Use with PFX certificate files |
@@ -520,22 +545,109 @@ This deployment guide covers both local development and Windows Server productio
 **Solutions**:
 
 ```powershell
-# Option 1: Use Invoke-WebRequest with proper PowerShell syntax
+# Method 1: Use PowerShell 6.0+ syntax (if you have PowerShell Core installed)
 Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
 
-# Option 2: Use the actual curl.exe if installed (Git for Windows includes it)
+# Method 2: For Windows PowerShell 5.1 - ignore SSL certificates programmatically
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -UseBasicParsing
+# Reset for security after testing
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+
+# Method 3: Use the actual curl.exe if installed (Git for Windows includes it)
 curl.exe -k https://localhost:8443/excellence/api/health
 
-# Option 3: Remove the curl alias to use real curl (advanced users)
-Remove-Item alias:curl
+# Method 4: Remove the curl alias to use real curl (advanced users only)
+Remove-Item alias:curl -Force
 curl -k https://localhost:8443/excellence/api/health
 ```
 
-**Health Check Script**: Use the provided health check script for comprehensive testing:
+**Check PowerShell Version**: Run `$PSVersionTable.PSVersion` to determine which method to use.
+
+### nginx Running but Website Not Accessible
+
+**Problem**: nginx service is running but `Invoke-WebRequest` fails with "Unable to connect to the remote server"
+
+**Cause**: Multiple possible issues with nginx configuration, SSL setup, or file deployment.
+
+**Diagnosis Steps**:
+
+```powershell
+# 1. Verify nginx is actually listening on port 8443
+netstat -an | findstr :8443
+# Should show: TCP    0.0.0.0:8443    0.0.0.0:0    LISTENING
+
+# 2. Check nginx error logs for specific issues
+Get-Content "C:\nginx\logs\error.log" -Tail 20
+
+# 3. Test if nginx is responding at all (without SSL)
+# First, check if nginx has HTTP redirect configured
+netstat -an | findstr :80
+curl.exe -I http://localhost/excellence/ 2>&1
+
+# 4. Verify SSL certificate files exist and are readable
+Test-Path "C:\Cert\server.crt"
+Test-Path "C:\Cert\server.key"
+# Check certificate is not expired
+if (Get-Command openssl -ErrorAction SilentlyContinue) {
+    openssl x509 -in "C:\Cert\server.crt" -noout -dates
+}
+
+# 5. Verify frontend files are deployed correctly  
+Test-Path "C:\inetpub\wwwroot\ExcelAddin\dist\taskpane.html"
+Get-ChildItem "C:\inetpub\wwwroot\ExcelAddin\dist\" | Select-Object Name, Length
+
+# 6. Test nginx configuration syntax
+C:\nginx\nginx.exe -t
+
+# 7. Check Windows Firewall is not blocking port 8443
+New-NetFirewallRule -DisplayName "nginx HTTPS" -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow -ErrorAction SilentlyContinue
+```
+
+**Common Fixes**:
+
+```powershell
+# Fix 1: Restart nginx service properly
+Stop-Service nginx -Force
+Start-Sleep -Seconds 5
+Start-Service nginx
+
+# Fix 2: Check nginx is using correct configuration file
+C:\nginx\nginx.exe -t -c C:\nginx\conf\nginx.conf
+
+# Fix 3: Verify nginx service is pointing to correct executable
+nssm get nginx Application
+nssm get nginx AppDirectory
+# Should be: Application=C:\nginx\nginx.exe, AppDirectory=C:\nginx
+
+# Fix 4: If SSL issues, temporarily test without HTTPS
+# Edit nginx configuration to temporarily add HTTP listener on port 8080:
+# server {
+#     listen 8080;
+#     server_name _;
+#     location /excellence/ {
+#         alias C:/inetpub/wwwroot/ExcelAddin/dist/;
+#         index taskpane.html;
+#     }
+# }
+# Then test: Invoke-WebRequest -Uri "http://localhost:8080/excellence/taskpane.html"
+```
+
+**Comprehensive Diagnostic Tool**: Use the automated connectivity diagnostic script to identify issues:
 ```powershell
 cd C:\inetpub\wwwroot\ExcelAddin
-.\deployment\monitoring\health-check.ps1 -DomainName "localhost:8443" -Detailed
+.\deployment\scripts\diagnose-connectivity.ps1 -DomainName "localhost:8443" -Detailed
 ```
+
+This script will automatically check:
+- nginx service status and port listening
+- SSL certificate files and validity  
+- Frontend file deployment
+- Connectivity tests with proper PowerShell version handling
+- nginx configuration syntax
+- Windows Firewall settings
+- Recent error logs
 
 ### Frontend Not Loading
 
@@ -553,8 +665,18 @@ Get-ChildItem "C:\inetpub\wwwroot\ExcelAddin\dist\" -Filter "*.js"
 
 2. **Test nginx static file serving**:
 ```powershell
-Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -SkipCertificateCheck
-Invoke-WebRequest -Uri "https://localhost:8443/excellence/manifest.xml" -SkipCertificateCheck  
+# For PowerShell 6.0+
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -SkipCertificateCheck
+    Invoke-WebRequest -Uri "https://localhost:8443/excellence/manifest.xml" -SkipCertificateCheck
+} else {
+    # For Windows PowerShell 5.1
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -UseBasicParsing
+    Invoke-WebRequest -Uri "https://localhost:8443/excellence/manifest.xml" -UseBasicParsing
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+}
 ```
 
 3. **Check browser developer tools** (F12 in Excel):
