@@ -25,13 +25,13 @@ Update the domain names and GUID before deployment.
   <Description DefaultValue="Excel Add-in for financial data management - Staging Environment"/>
   
   <!-- Icons -->
-  <IconUrl DefaultValue="https://server01.intranet.local:8443/excellence/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://server01.intranet.local:8443/excellence/assets/icon-64.png"/>
+  <IconUrl DefaultValue="https://server01.intranet.local:9443/excellence/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://server01.intranet.local:9443/excellence/assets/icon-64.png"/>
   
   <!-- Support and help URLs -->
   <SupportUrl DefaultValue="https://your-company.com/support"/>
   <AppDomains>
-    <AppDomain>https://server01.intranet.local:8443</AppDomain>
+    <AppDomain>https://server01.intranet.local:9443</AppDomain>
     <AppDomain>https://your-company.com</AppDomain>
   </AppDomains>
   
@@ -42,7 +42,7 @@ Update the domain names and GUID before deployment.
   
   <!-- Default settings -->
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://server01.intranet.local:8443/excellence/taskpane.html"/>
+    <SourceLocation DefaultValue="https://server01.intranet.local:9443/excellence/taskpane.html"/>
   </DefaultSettings>
   
   <!-- Permissions -->
@@ -94,13 +94,13 @@ Update the domain names and GUID before deployment.
     <!-- Resources -->
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://server01.intranet.local:8443/excellence/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://server01.intranet.local:8443/excellence/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://server01.intranet.local:8443/excellence/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://server01.intranet.local:9443/excellence/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://server01.intranet.local:9443/excellence/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://server01.intranet.local:9443/excellence/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Commands.Url" DefaultValue="https://server01.intranet.local:8443/excellence/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://server01.intranet.local:8443/excellence/taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://server01.intranet.local:9443/excellence/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://server01.intranet.local:9443/excellence/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="CommandsGroup.Label" DefaultValue="PrimeExcelence"/>

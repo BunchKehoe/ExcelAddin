@@ -24,11 +24,11 @@ Excel Desktop/Online
 ```
 Excel Desktop/Online
         │
-        └── https://server01.intranet.local:8443/excellence
+        └── https://server01.intranet.local:9443/excellence
                     │
                     ▼
         ┌─────────────────────────────────────────────┐
-        │              nginx (Port 8443)              │
+        │              nginx (Port 9443)              │
         │                                             │
         │  • SSL Termination                         │
         │  • Static File Serving (/excellence/)      │
@@ -47,7 +47,7 @@ Excel Desktop/Online
 **How Frontend Hosting Works:**
 - nginx serves all frontend files (HTML, JS, CSS, images) as static content
 - Files are served from `C:\inetpub\wwwroot\ExcelAddin\dist\` directory
-- URL `https://server01.intranet.local:8443/excellence/` loads `dist/taskpane.html`
+- URL `https://server01.intranet.local:9443/excellence/` loads `dist/taskpane.html`
 - Excel add-in loads in taskpane, makes API calls to `/excellence/api/` endpoints
 - nginx proxies API calls to backend Flask app running on port 5000
 
@@ -74,8 +74,8 @@ npm run build:prod         # Production build configured for production server
 
 ### 3. Integration with Excel
 - **Manifest File**: `manifest.xml` defines add-in metadata and entry points
-- **Taskpane**: Main interface loads at `https://server:8443/excellence/taskpane.html`  
-- **Commands**: Ribbon commands load at `https://server:8443/excellence/commands.html`
+- **Taskpane**: Main interface loads at `https://server:9443/excellence/taskpane.html`  
+- **Commands**: Ribbon commands load at `https://server:9443/excellence/commands.html`
 - **API Communication**: Frontend makes AJAX calls to backend API
 
 ### 4. nginx Configuration for Frontend
@@ -327,8 +327,8 @@ $PSVersionTable.PSVersion
 
 # For PowerShell 6.0+ (PowerShell Core)
 if ($PSVersionTable.PSVersion.Major -ge 6) {
-    Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
-    Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -SkipCertificateCheck -UseBasicParsing
+    Invoke-WebRequest -Uri "https://localhost:9443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
+    Invoke-WebRequest -Uri "https://localhost:9443/excellence/taskpane.html" -SkipCertificateCheck -UseBasicParsing
 } else {
     # For Windows PowerShell 5.1 and earlier - use .NET classes to ignore SSL
     Write-Host "Using Windows PowerShell - ignoring SSL certificates for testing"
@@ -336,8 +336,8 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
     
     try {
-        Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -UseBasicParsing
-        Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -UseBasicParsing
+        Invoke-WebRequest -Uri "https://localhost:9443/excellence/api/health" -UseBasicParsing
+        Invoke-WebRequest -Uri "https://localhost:9443/excellence/taskpane.html" -UseBasicParsing
         Write-Host "✅ HTTPS endpoints are accessible"
     } catch {
         Write-Host "❌ HTTPS connection failed: $($_.Exception.Message)"
@@ -351,8 +351,8 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
 # Alternative: Use curl.exe directly (if Git for Windows is installed)
 if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
     Write-Host "Testing with curl.exe..."
-    curl.exe -k -s -o /dev/null -w "%{http_code}" https://localhost:8443/excellence/api/health
-    curl.exe -k -s -o /dev/null -w "%{http_code}" https://localhost:8443/excellence/taskpane.html
+    curl.exe -k -s -o /dev/null -w "%{http_code}" https://localhost:9443/excellence/api/health
+    curl.exe -k -s -o /dev/null -w "%{http_code}" https://localhost:9443/excellence/taskpane.html
 }
 ```
 
@@ -375,7 +375,7 @@ Key settings for subpath deployment:
 
 ```nginx
 server {
-    listen 8443 ssl;
+    listen 9443 ssl;
     server_name server01.intranet.local;
     
     # SSL Configuration
@@ -402,18 +402,18 @@ server {
 ```bash
 FLASK_ENV=production
 FLASK_DEBUG=False
-API_BASE_URL=https://server01.intranet.local:8443/excellence/api
-CORS_ORIGINS=https://server01.intranet.local:8443
+API_BASE_URL=https://server01.intranet.local:9443/excellence/api
+CORS_ORIGINS=https://server01.intranet.local:9443
 DATABASE_CONFIG=database.cfg
 ```
 
 ### Excel Manifest (`manifest-staging.xml`)
 
 ```xml
-<SourceLocation DefaultValue="https://server01.intranet.local:8443/excellence/taskpane.html"/>
-<SupportUrl DefaultValue="https://server01.intranet.local:8443/excellence/"/>
+<SourceLocation DefaultValue="https://server01.intranet.local:9443/excellence/taskpane.html"/>
+<SupportUrl DefaultValue="https://server01.intranet.local:9443/excellence/"/>
 <AppDomains>
-  <AppDomain>https://server01.intranet.local:8443</AppDomain>
+  <AppDomain>https://server01.intranet.local:9443</AppDomain>
 </AppDomains>
 ```
 
@@ -514,7 +514,7 @@ nssm set nginx AppParameters "-g \"daemon off;\""
 
 ## Subpath Deployment Configuration
 
-To deploy at `https://server01.intranet.local:8443/excellence` instead of root:
+To deploy at `https://server01.intranet.local:9443/excellence` instead of root:
 
 ### 1. nginx Configuration
 - Set location blocks for `/excellence/` and `/excellence/api/`
@@ -538,7 +538,7 @@ This deployment guide covers both local development and Windows Server productio
 
 ### PowerShell curl Command Issues
 
-**Problem**: `curl -k https://localhost:8443/excellence/api/health` fails with "A parameter cannot be found that matches parameter name 'k'."
+**Problem**: `curl -k https://localhost:9443/excellence/api/health` fails with "A parameter cannot be found that matches parameter name 'k'."
 
 **Cause**: In Windows PowerShell, `curl` is an alias for `Invoke-WebRequest`, which doesn't support the `-k` parameter.
 
@@ -546,21 +546,21 @@ This deployment guide covers both local development and Windows Server productio
 
 ```powershell
 # Method 1: Use PowerShell 6.0+ syntax (if you have PowerShell Core installed)
-Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
+Invoke-WebRequest -Uri "https://localhost:9443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
 
 # Method 2: For Windows PowerShell 5.1 - ignore SSL certificates programmatically
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -UseBasicParsing
+Invoke-WebRequest -Uri "https://localhost:9443/excellence/api/health" -UseBasicParsing
 # Reset for security after testing
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
 
 # Method 3: Use the actual curl.exe if installed (Git for Windows includes it)
-curl.exe -k https://localhost:8443/excellence/api/health
+curl.exe -k https://localhost:9443/excellence/api/health
 
 # Method 4: Remove the curl alias to use real curl (advanced users only)
 Remove-Item alias:curl -Force
-curl -k https://localhost:8443/excellence/api/health
+curl -k https://localhost:9443/excellence/api/health
 ```
 
 **Check PowerShell Version**: Run `$PSVersionTable.PSVersion` to determine which method to use.
@@ -574,9 +574,9 @@ curl -k https://localhost:8443/excellence/api/health
 **Diagnosis Steps**:
 
 ```powershell
-# 1. Verify nginx is actually listening on port 8443
-netstat -an | findstr :8443
-# Should show: TCP    0.0.0.0:8443    0.0.0.0:0    LISTENING
+# 1. Verify nginx is actually listening on port 9443
+netstat -an | findstr :9443
+# Should show: TCP    0.0.0.0:9443    0.0.0.0:0    LISTENING
 
 # 2. Check nginx error logs for specific issues
 Get-Content "C:\nginx\logs\error.log" -Tail 20
@@ -601,8 +601,8 @@ Get-ChildItem "C:\inetpub\wwwroot\ExcelAddin\dist\" | Select-Object Name, Length
 # 6. Test nginx configuration syntax
 C:\nginx\nginx.exe -t
 
-# 7. Check Windows Firewall is not blocking port 8443
-New-NetFirewallRule -DisplayName "nginx HTTPS" -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow -ErrorAction SilentlyContinue
+# 7. Check Windows Firewall is not blocking port 9443
+New-NetFirewallRule -DisplayName "nginx HTTPS" -Direction Inbound -Protocol TCP -LocalPort 9443 -Action Allow -ErrorAction SilentlyContinue
 ```
 
 **Common Fixes**:
@@ -637,7 +637,7 @@ nssm get nginx AppDirectory
 **Comprehensive Diagnostic Tool**: Use the automated connectivity diagnostic script to identify issues:
 ```powershell
 cd C:\inetpub\wwwroot\ExcelAddin
-.\deployment\scripts\diagnose-connectivity.ps1 -DomainName "localhost:8443" -Detailed
+.\deployment\scripts\diagnose-connectivity.ps1 -DomainName "localhost:9443" -Detailed
 ```
 
 This script will automatically check:
@@ -667,14 +667,14 @@ Get-ChildItem "C:\inetpub\wwwroot\ExcelAddin\dist\" -Filter "*.js"
 ```powershell
 # For PowerShell 6.0+
 if ($PSVersionTable.PSVersion.Major -ge 6) {
-    Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -SkipCertificateCheck
-    Invoke-WebRequest -Uri "https://localhost:8443/excellence/manifest.xml" -SkipCertificateCheck
+    Invoke-WebRequest -Uri "https://localhost:9443/excellence/taskpane.html" -SkipCertificateCheck
+    Invoke-WebRequest -Uri "https://localhost:9443/excellence/manifest.xml" -SkipCertificateCheck
 } else {
     # For Windows PowerShell 5.1
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -UseBasicParsing
-    Invoke-WebRequest -Uri "https://localhost:8443/excellence/manifest.xml" -UseBasicParsing
+    Invoke-WebRequest -Uri "https://localhost:9443/excellence/taskpane.html" -UseBasicParsing
+    Invoke-WebRequest -Uri "https://localhost:9443/excellence/manifest.xml" -UseBasicParsing
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
 }
 ```
@@ -687,5 +687,5 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
 4. **Verify manifest file URLs** match your server configuration:
 ```xml
 <!-- In manifest.xml, ensure URLs match your deployment -->
-<SourceLocation DefaultValue="https://server01.intranet.local:8443/excellence/taskpane.html"/>
+<SourceLocation DefaultValue="https://server01.intranet.local:9443/excellence/taskpane.html"/>
 ```

@@ -2,7 +2,7 @@
 # Usage: .\diagnose-connectivity.ps1 [-DomainName "localhost:8443"] [-Detailed]
 
 param(
-    [string]$DomainName = "localhost:8443",
+    [string]$DomainName = "localhost:9443",
     [switch]$Detailed = $false
 )
 
@@ -27,13 +27,13 @@ try {
 # Test 2: Check if ports are listening
 Write-Host ""
 Write-Host "2. Checking if nginx is listening on required ports..." -ForegroundColor Green
-$listening = netstat -an | findstr ":8443"
+$listening = netstat -an | findstr ":9443"
 if ($listening) {
-    Write-Host "✅ Port 8443 is listening:" -ForegroundColor Green
+    Write-Host "✅ Port 9443 is listening:" -ForegroundColor Green
     Write-Host $listening -ForegroundColor White
 } else {
-    Write-Host "❌ Port 8443 is not listening" -ForegroundColor Red
-    Write-Host "💡 nginx may not be configured to listen on port 8443" -ForegroundColor Yellow
+    Write-Host "❌ Port 9443 is not listening" -ForegroundColor Red
+    Write-Host "💡 nginx may not be configured to listen on port 9443" -ForegroundColor Yellow
 }
 
 # Test 3: Check nginx configuration
@@ -41,7 +41,12 @@ Write-Host ""
 Write-Host "3. Testing nginx configuration syntax..." -ForegroundColor Green
 if (Test-Path "C:\nginx\nginx.exe") {
     try {
+        # Change to nginx directory to ensure correct working directory
+        $originalPath = Get-Location
+        Set-Location "C:\nginx"
         $configTest = & "C:\nginx\nginx.exe" -t 2>&1
+        Set-Location $originalPath
+        
         if ($LASTEXITCODE -eq 0) {
             Write-Host "✅ nginx configuration syntax is valid" -ForegroundColor Green
         } else {
@@ -50,6 +55,8 @@ if (Test-Path "C:\nginx\nginx.exe") {
         }
     } catch {
         Write-Host "❌ Error running nginx config test: $($_.Exception.Message)" -ForegroundColor Red
+        # Restore original path if error occurred
+        if ($originalPath) { Set-Location $originalPath }
     }
 } else {
     Write-Host "❌ nginx.exe not found at C:\nginx\nginx.exe" -ForegroundColor Red
@@ -174,15 +181,18 @@ if (Test-Path $errorLogPath) {
 
 # Test 8: Windows Firewall check
 Write-Host ""
-Write-Host "8. Checking Windows Firewall for port 8443..." -ForegroundColor Green
+Write-Host "8. Checking Windows Firewall for port 9443..." -ForegroundColor Green
 try {
-    $firewallRule = Get-NetFirewallRule | Where-Object {$_.DisplayName -like "*8443*" -or $_.DisplayName -like "*nginx*"} | Select-Object -First 1
+    $firewallRule = Get-NetFirewallRule | Where-Object {$_.DisplayName -like "*9443*" -or $_.DisplayName -like "*nginx*"} | Select-Object -First 1
     if ($firewallRule) {
         Write-Host "✅ Found firewall rule: $($firewallRule.DisplayName)" -ForegroundColor Green
     } else {
-        Write-Host "❌ No firewall rule found for port 8443" -ForegroundColor Red
+        Write-Host "❌ No firewall rule found for port 9443" -ForegroundColor Red
         Write-Host "💡 You may need to add a firewall rule:" -ForegroundColor Yellow
-        Write-Host "New-NetFirewallRule -DisplayName 'nginx HTTPS' -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow" -ForegroundColor Cyan
+        Write-Host "New-NetFirewallRule -DisplayName 'nginx HTTPS' -Direction Inbound -Protocol TCP -LocalPort 9443 -Action Allow" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "🔧 Auto-fix available! Run this to add the firewall rule:" -ForegroundColor Green
+        Write-Host ".\deployment\scripts\add-firewall-rule.ps1" -ForegroundColor Cyan
     }
 } catch {
     Write-Host "❌ Could not check firewall rules: $($_.Exception.Message)" -ForegroundColor Red
