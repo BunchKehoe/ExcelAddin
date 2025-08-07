@@ -28,7 +28,7 @@ Excel Desktop/Online
                     │
                     ▼
         ┌─────────────────────────────────────────────┐
-        │            Simple nginx (Port 9443)        │
+        │             Windows IIS (Port 9443)        │
         │                                             │
         │  • SSL with server-vs81t certificates      │
         │  • Static File Serving (/excellence/)      │
@@ -36,7 +36,8 @@ Excel Desktop/Online
         │    - JavaScript bundles, CSS               │
         │    - Images, manifest.xml                  │
         │  • API Proxy (/excellence/api/ → :5000)    │
-        │  • Windows Service (via NSSM)              │
+        │  • URL Rewrite + ARR for routing          │
+        │  • Native Windows Service                  │
         └─────────────────────────────────────────────┘
                     │
                     └── Backend Flask App (Port 5000)
@@ -45,11 +46,11 @@ Excel Desktop/Online
 ```
 
 **How Frontend Hosting Works:**
-- nginx serves all frontend files (HTML, JS, CSS, images) as static content
+- IIS serves all frontend files (HTML, JS, CSS, images) as static content
 - Files are served from `C:\inetpub\wwwroot\ExcelAddin\dist\` directory  
 - URL `https://server-vs81t.intranet.local:9443/excellence/` loads `dist/taskpane.html`
 - Excel add-in loads in taskpane, makes API calls to `/excellence/api/` endpoints
-- nginx proxies API calls to backend Flask app running on port 5000
+- IIS URL Rewrite with ARR proxies API calls to backend Flask app running on port 5000
 
 ## Frontend Deployment Overview
 
@@ -78,12 +79,13 @@ npm run build:prod         # Production build configured for production server
 - **Commands**: Ribbon commands load at `https://server:9443/excellence/commands.html`
 - **API Communication**: Frontend makes AJAX calls to backend API
 
-### 4. nginx Configuration for Frontend
-The nginx server is configured to:
+### 4. IIS Configuration for Frontend
+The IIS server is configured to:
 - Serve static files from the application directory
-- Handle URL routing for single-page app behavior
-- Proxy API requests to the backend Flask application
+- Handle URL routing for single-page app behavior using URL Rewrite module
+- Proxy API requests to the backend Flask application using Application Request Routing (ARR)
 - Provide SSL termination for secure HTTPS access
+- Native Windows service integration without third-party tools
 
 ## Local Development Setup
 
@@ -255,22 +257,21 @@ cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
 .\handle-encrypted-key.ps1 -KeyPath "C:\Cert\server.key" -OutputPath "C:\Cert"
 ```
 
-### Phase 2: Configure nginx
+### Phase 2: Configure IIS
 
 ```powershell
-# Copy nginx configuration
-cd C:\inetpub\wwwroot\ExcelAddin\deployment
+# Run as Administrator
+cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
 
-# Copy nginx.conf.windows.template to C:\nginx\conf\nginx.conf
-copy nginx\nginx.conf.windows.template C:\nginx\conf\nginx.conf
+# Install and configure IIS with required modules
+.\setup-iis.ps1 -Force
 
-# Copy Excel add-in configuration  
-copy nginx\excel-addin.conf C:\nginx\conf\excel-addin.conf
-
-# Edit C:\nginx\conf\excel-addin.conf:
-# - Update server_name to your domain
-# - Verify certificate paths in C:\Cert\
-# - Ensure subpath is /excellence/ if needed
+# This script will:
+# - Install IIS with URL Rewrite and ARR modules
+# - Create ExcelAddin website on port 9443
+# - Configure SSL with server-vs81t certificates
+# - Set up web.config for static files and API proxying
+# - Configure Windows Firewall
 ```
 
 ### Phase 3: Set Up Backend Service
@@ -286,20 +287,7 @@ cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
 Get-Service ExcelAddinBackend
 ```
 
-### Phase 4: Set Up nginx Service
-
-```powershell  
-# Run as Administrator  
-cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
-
-# Install and configure nginx service
-.\setup-nginx-service.ps1 -Force
-
-# Verify service installation
-Get-Service nginx
-```
-
-### Phase 5: Start Services
+### Phase 4: Start Services
 
 ```powershell
 # Start backend service first
@@ -308,20 +296,21 @@ Start-Service ExcelAddinBackend
 # Wait 10 seconds for backend to initialize
 Start-Sleep -Seconds 10
 
-# Start nginx service
-Start-Service nginx
+# Start IIS website (IIS service W3SVC starts automatically)
+Start-Website -Name "ExcelAddin"
 
-# Verify both services are running
-Get-Service ExcelAddinBackend, nginx
+# Verify services are running
+Get-Service ExcelAddinBackend, W3SVC
+Get-Website -Name "ExcelAddin"
 ```
 
-### Phase 6: Validate Deployment
+### Phase 5: Validate Deployment
 
 ```powershell
 # Test backend API directly
 Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing
 
-# Test through nginx proxy - Choose method based on your PowerShell version
+# Test through IIS proxy - Choose method based on your PowerShell version
 # Check PowerShell version first
 $PSVersionTable.PSVersion
 
@@ -369,59 +358,91 @@ if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
 
 ## Configuration Files
 
-### nginx Configuration (`deployment/nginx/excel-addin.conf`)
+### IIS Configuration (`deployment/iis/web.config`)
 
-**Simplified Configuration** - This configuration has been streamlined to focus on just what's needed:
+**IIS replaces nginx** - This configuration provides the same functionality with native Windows IIS:
 
-```nginx
-# Simple nginx configuration for Excel Add-in
-upstream backend_api {
-    server 127.0.0.1:5000;
-}
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <defaultDocument>
+      <files>
+        <add value="taskpane.html" />
+      </files>
+    </defaultDocument>
 
-# Main HTTPS server
-server {
-    listen 9443 ssl;
-    server_name server-vs81t.intranet.local 192.168.77.251;
-    
-    # SSL certificates for server-vs81t
-    ssl_certificate C:/Cert/server-vs81t.crt;
-    ssl_certificate_key C:/Cert/server-vs81t.key;
-    
-    # Basic SSL settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    
-    # CORS headers for Excel add-in
-    add_header Access-Control-Allow-Origin "*" always;
-    
-    # API proxy - remove /excellence prefix and forward to Flask backend
-    location /excellence/api/ {
-        rewrite ^/excellence/api/(.*) /api/$1 break;
-        proxy_pass http://backend_api;
-        proxy_set_header Host $host;
-    }
-    
-    # Serve static files from dist directory
-    location /excellence/ {
-        alias C:/inetpub/wwwroot/ExcelAddin/dist/;
-        index taskpane.html;
-    }
-    
-    # Health check
-    location /health {
-        return 200 "OK";
-        add_header Content-Type text/plain;
-    }
-}
+    <!-- URL Rewrite rules for API proxy and SPA routing -->
+    <rewrite>
+      <rules>
+        <!-- API Proxy Rule: Forward /excellence/api/ to Flask backend -->
+        <rule name="API Proxy" stopProcessing="true">
+          <match url="^excellence/api/(.*)$" />
+          <action type="Rewrite" url="http://127.0.0.1:5000/api/{R:1}" />
+        </rule>
+
+        <!-- Health check endpoint -->
+        <rule name="Health Check" stopProcessing="true">
+          <match url="^health$" />
+          <action type="CustomResponse" statusCode="200" statusReason="OK" />
+        </rule>
+
+        <!-- SPA fallback: serve taskpane.html for /excellence/ routes -->
+        <rule name="SPA Fallback">
+          <match url="^excellence/.*$" />
+          <conditions>
+            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="/excellence/taskpane.html" />
+        </rule>
+      </rules>
+    </rewrite>
+
+    <!-- CORS headers for Excel add-in -->
+    <httpProtocol>
+      <customHeaders>
+        <add name="Access-Control-Allow-Origin" value="*" />
+        <add name="Access-Control-Allow-Methods" value="GET, POST, PUT, DELETE, OPTIONS" />
+        <add name="Access-Control-Allow-Headers" value="Content-Type, Authorization" />
+      </customHeaders>
+    </httpProtocol>
+  </system.webServer>
+</configuration>
 ```
 
-**Key Features of the Simplified Configuration:**
-- **Minimal complexity** - Only essential directives
-- **Correct certificate names** - Uses `server-vs81t.crt` and `server-vs81t.key`
-- **Both server names** - Supports both `server-vs81t.intranet.local` and `192.168.77.251`
-- **Simple proxy** - Direct API forwarding without complex rules
-- **Basic CORS** - Just what Excel add-in needs
-- **No rate limiting** - Removed complexity that could cause issues
+**Key Features of the IIS Configuration:**
+- **Native Windows integration** - No third-party software required
+- **URL Rewrite module** - Handles API proxying and SPA routing
+- **Application Request Routing** - Proxies API calls to Flask backend
+- **SSL termination** - Configured through IIS Manager or PowerShell
+- **Same functionality** - Replaces nginx with equivalent IIS features
+
+## Migrating from nginx to IIS
+
+If you previously used nginx and want to switch to IIS (e.g., due to antivirus blocking nginx):
+
+```powershell
+# Run as Administrator
+cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
+
+# Migrate from nginx to IIS (stops nginx, sets up IIS)
+.\migrate-nginx-to-iis.ps1 -Force
+
+# Or set up IIS from scratch
+.\setup-iis.ps1 -Force
+
+# Test IIS configuration
+.\test-iis-simple.ps1
+```
+
+The migration script will:
+- Stop and optionally remove nginx service
+- Install IIS with required modules (URL Rewrite, ARR)
+- Create ExcelAddin website with SSL on port 9443
+- Configure web.config for static files and API proxying
+- Update firewall rules
+- Keep the same URLs and functionality
 
 ### Backend Environment (`.env.production`)
 
@@ -442,6 +463,37 @@ DATABASE_CONFIG=database.cfg
   <AppDomain>https://server-vs81t.intranet.local:9443</AppDomain>
 </AppDomains>
 ```
+
+## IIS Installation & Testing
+
+### IIS Quick Start
+
+```bash
+# Apply library upgrades (if not done)
+cd backend
+pip install -r requirements.txt --upgrade
+
+# Build frontend
+npm run build:staging
+
+# Set up IIS (run as Administrator)
+.\deployment\scripts\setup-iis.ps1 -Force
+
+# Test IIS configuration
+.\deployment\scripts\test-iis-simple.ps1
+
+# Comprehensive connectivity diagnostics
+.\deployment\scripts\diagnose-connectivity.ps1 -DomainName "server-vs81t.intranet.local:9443" -Detailed
+```
+
+### Manual IIS Module Installation
+
+If the setup script cannot automatically install modules, download and install these manually:
+
+1. **URL Rewrite Module**: https://www.iis.net/downloads/microsoft/url-rewrite
+2. **Application Request Routing (ARR)**: https://www.iis.net/downloads/microsoft/application-request-routing
+
+After installing, run the setup script again: `.\setup-iis.ps1 -Force`
 
 ## SSL Certificate Management
 
@@ -473,25 +525,28 @@ openssl x509 -in C:\Cert\server.crt -text -noout
 # Test private key match
 openssl rsa -in C:\Cert\server.key -check
 
-# Test SSL configuration  
-.\deployment\scripts\validate-nginx-config.ps1
+# Test SSL configuration with IIS
+Get-Website -Name "ExcelAddin" | Select-Object Name, State, Bindings
+Get-WebBinding -Name "ExcelAddin"
 ```
 
 ## Testing and Debugging
 
-### New Simplified Testing Scripts
+### IIS Testing Scripts
 
-**Test nginx Configuration**
+**Test IIS Configuration**
 ```powershell
-# Test the simplified nginx configuration
-.\deployment\scripts\test-nginx-simple.ps1
+# Test IIS setup and configuration
+.\deployment\scripts\test-iis-simple.ps1
 
 # This script checks:
-# - nginx executable exists
-# - Configuration syntax is valid  
-# - Required directories exist
-# - SSL certificates are present
-# - Port 9443 availability
+# - IIS service is running
+# - ExcelAddin website exists and is running  
+# - Port 9443 is listening
+# - Physical path and files exist
+# - SSL certificate is configured
+# - Health check endpoint responds
+# - Frontend taskpane.html is accessible
 ```
 
 **Test Backend Standalone (Outside NSSM)**
@@ -508,10 +563,10 @@ openssl rsa -in C:\Cert\server.key -check
 
 **Enhanced Connectivity Diagnostics**
 ```powershell
-# Comprehensive connectivity testing
+# Comprehensive connectivity testing (updated for IIS)
 .\deployment\scripts\diagnose-connectivity.ps1 -DomainName "server-vs81t.intranet.local:9443" -Detailed
 
-# Updated to test:
+# Tests both IIS and nginx configurations:
 # - Correct server name (server-vs81t)
 # - Port 9443 connectivity
 # - SSL certificate validation
@@ -519,25 +574,33 @@ openssl rsa -in C:\Cert\server.key -check
 # - Firewall rules
 ```
 
-### Development Server vs nginx Comparison
+### Development Server vs IIS Comparison
 
-| Aspect | npm start (Dev Server) | nginx Production |
-|--------|------------------------|------------------|
+| Aspect | npm start (Dev Server) | IIS Production |
+|--------|------------------------|----------------|
 | **URL** | `https://localhost:3000` | `https://server-vs81t.intranet.local:9443/excellence` |
 | **SSL** | Self-signed development cert | Production server-vs81t certificates |
 | **Hot Reload** | ✅ Automatic code reload | ❌ Must rebuild and deploy |
-| **API Proxy** | Built into webpack dev server | nginx proxy to port 5000 |
+| **API Proxy** | Built into webpack dev server | IIS URL Rewrite + ARR to port 5000 |
 | **Purpose** | Development and testing | Production deployment |
 | **Debugging** | Easy to debug frontend issues | Use test scripts for debugging |
+| **Management** | Command line (npm) | IIS Manager or PowerShell |
 
 ### Troubleshooting Common Issues
 
-**When nginx doesn't work but npm start does:**
-1. Run `.\deployment\scripts\test-nginx-simple.ps1` to validate setup
-2. Check certificate files are named `server-vs81t.crt` and `server-vs81t.key` 
-3. Verify frontend files exist in `C:\inetpub\wwwroot\ExcelAddin\dist\`
-4. Test backend separately with `.\deployment\scripts\test-backend-standalone.ps1`
-5. Run nginx configuration syntax test: `C:\nginx\nginx.exe -t` (from C:\nginx directory)
+**When IIS doesn't work but npm start does:**
+1. Run `.\deployment\scripts\test-iis-simple.ps1` to validate setup
+2. Check that IIS has URL Rewrite and ARR modules installed
+3. Verify SSL certificate is configured in IIS Manager 
+4. Verify frontend files exist in `C:\inetpub\wwwroot\ExcelAddin\dist\`
+5. Test backend separately with `.\deployment\scripts\test-backend-standalone.ps1`
+6. Check web.config syntax and IIS logs in Event Viewer
+
+**Common IIS Setup Issues:**
+- **Missing modules**: Install URL Rewrite and Application Request Routing
+- **SSL configuration**: Use IIS Manager to bind server-vs81t certificate
+- **Permissions**: Ensure IIS_IUSRS has read access to physical directory
+- **ARR not enabled**: Run `Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter 'system.webServer/proxy' -Name 'enabled' -Value 'true'`
 
 ## Service Management
 
@@ -546,13 +609,13 @@ openssl rsa -in C:\Cert\server.key -check
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | `setup-backend-service.ps1` | Install/configure backend Windows service | Run once during deployment |
-| `setup-nginx-service.ps1` | Install/configure nginx Windows service | Run once during deployment |
+| `setup-iis.ps1` | **Install/configure IIS with Excel Add-in site** | **Run once during deployment** |
+| `migrate-nginx-to-iis.ps1` | **Migrate from nginx to IIS** | **Use to switch from nginx to IIS** |
+| `test-iis-simple.ps1` | **Test IIS configuration and connectivity** | **Use to validate IIS setup** |
 | `diagnose-backend-service.ps1` | Troubleshoot backend service issues | Use when service fails to start |
-| `diagnose-connectivity.ps1` | **Comprehensive connectivity diagnostics** | **Use when nginx is running but website not accessible** |
-| `test-nginx-simple.ps1` | **Test simplified nginx configuration** | **Use before starting nginx** |
+| `diagnose-connectivity.ps1` | **Comprehensive connectivity diagnostics** | **Use when IIS is running but website not accessible** |
 | `test-backend-standalone.ps1` | **Run Flask backend outside NSSM for debugging** | **Use when backend issues occur** |
 | `add-firewall-rule.ps1` | **Automatically add Windows Firewall rule for port 9443** | **Run as Administrator** |
-| `validate-nginx-config.ps1` | Test nginx configuration | Use before starting nginx |
 | `handle-encrypted-key.ps1` | Convert encrypted SSL keys | Use if SSL keys require passwords |
 | `extract-pfx.ps1` | Extract certificates from PFX files | Use with PFX certificate files |
 
@@ -560,23 +623,51 @@ openssl rsa -in C:\Cert\server.key -check
 
 ```powershell
 # Check service status
-Get-Service ExcelAddinBackend, nginx
+Get-Service ExcelAddinBackend, W3SVC
+Get-Website -Name "ExcelAddin"
 
 # Start services (in order)
 Start-Service ExcelAddinBackend
-Start-Service nginx
+Start-Website -Name "ExcelAddin"  # IIS service W3SVC starts automatically
 
 # Stop services  
-Stop-Service nginx
+Stop-Website -Name "ExcelAddin"
 Stop-Service ExcelAddinBackend
 
 # Restart services
 Restart-Service ExcelAddinBackend
-Restart-Service nginx
+Stop-Website -Name "ExcelAddin"; Start-Website -Name "ExcelAddin"
 
-# View service logs (NSSM creates these)
-Get-Content C:\nginx\logs\service.log -Tail 50
+# View backend service logs (NSSM creates these)
 Get-Content C:\inetpub\wwwroot\ExcelAddin\backend\logs\service.log -Tail 50
+
+# View IIS logs
+Get-Content C:\inetpub\logs\LogFiles\W3SVC*\*.log | Select-Object -Last 50
+
+# IIS Management
+inetmgr  # Opens IIS Manager GUI (run as Administrator)
+```
+
+### IIS Management Commands
+
+```powershell
+# Website management
+Get-Website                           # List all websites
+Get-Website -Name "ExcelAddin"       # Get specific website info
+Start-Website -Name "ExcelAddin"     # Start website
+Stop-Website -Name "ExcelAddin"      # Stop website
+Restart-Website -Name "ExcelAddin"   # Restart website
+
+# Application pool management
+Get-IISAppPool -Name "ExcelAddinAppPool"     # Get app pool info
+Start-WebAppPool -Name "ExcelAddinAppPool"   # Start app pool  
+Stop-WebAppPool -Name "ExcelAddinAppPool"    # Stop app pool
+Restart-WebAppPool -Name "ExcelAddinAppPool" # Restart app pool
+
+# SSL certificate management
+Get-WebBinding -Name "ExcelAddin"            # View SSL binding
+Get-ChildItem Cert:\LocalMachine\My\        # List installed certificates
+```
 ```
 
 ### Service Configuration with NSSM
