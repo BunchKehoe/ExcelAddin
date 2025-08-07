@@ -36,6 +36,10 @@ tmp/
 temp/
 .tmp/
 
+# Deployment artifacts
+deployment-package/
+excel-addin-*.tar.gz
+
 # Python
 __pycache__/
 *.py[cod]

@@ -1,51 +1,52 @@
 # Excel Add-in Backend API
 
-This is a Python Flask backend application that provides data access APIs for the Excel add-in frontend. The backend follows Domain Driven Architecture (DDA) principles and provides endpoints for raw database tables and market data.
+Python Flask backend service providing REST API endpoints for the Excel add-in frontend.
 
 ## Architecture
 
-The backend is structured using Domain Driven Architecture:
-
+Domain Driven Architecture structure:
 ```
 backend/
-├── src/
-│   ├── domain/           # Business logic and entities
-│   │   ├── entities/     # Domain entities
-│   │   ├── repositories/ # Repository interfaces
-│   │   └── services/     # Domain services
-│   ├── infrastructure/   # External concerns
-│   │   ├── config/       # Configuration management
-│   │   └── database/     # Database implementations
-│   ├── application/      # Application services
-│   │   ├── services/     # Application services
-│   │   └── dtos/         # Data Transfer Objects
-│   └── presentation/     # Controllers and API endpoints
-│       ├── controllers/  # Flask controllers
-│       └── middleware/   # Middleware components
-├── app.py               # Main Flask application
-├── run.py              # Application runner
-├── requirements.txt    # Python dependencies
-└── database.cfg       # Database configuration
+├── src/                   # Business logic and API layers
+├── app.py                 # Main Flask application
+├── run.py                 # Development server entry point
+├── service_wrapper.py     # Windows service wrapper
+├── requirements.txt       # Python dependencies
+└── database.cfg          # Database configuration
 ```
 
-## Requirements
+## Quick Start
 
-- Python 3.12
-- Flask 3.0.2
-- SQLAlchemy 2.0.27
-- pyodbc (for SQL Server connectivity)
-- Flask-CORS (for frontend integration)
+### Local Development
+```bash
+cd backend
+pip install -r requirements.txt
+python run.py
+```
+API available at `http://localhost:5000`
 
-## Setup
+### Windows Service (Production)
+```powershell
+# Use the deployment script
+.\deployment\scripts\setup-backend-service.ps1
+```
 
-1. **Install dependencies:**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
+## Configuration
 
-2. **Configure database connection:**
-   Edit `database.cfg` with your SQL Server connection details:
+- **Development**: Uses `run.py` with Flask development server
+- **Production**: Uses `service_wrapper.py` with Windows Service via NSSM
+- **Database**: Configure connection details in `database.cfg`
+- **Environment**: Set variables in `.env.production`
+
+## API Endpoints
+
+- `GET /api/health` - Health check endpoint
+- Additional endpoints defined in `src/presentation/controllers/`
+
+For complete setup, deployment, and troubleshooting information, see the main project documentation:
+- [Application Guide](../APPLICATION_GUIDE.md)
+- [Deployment Guide](../DEPLOYMENT_GUIDE.md)  
+- [Troubleshooting Guide](../TROUBLESHOOTING_GUIDE.md)
    ```ini
    [database]
    url = mssql+pyodbc://user:pass@server-vs81t.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server
