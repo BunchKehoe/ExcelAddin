@@ -32,6 +32,9 @@ Excel Desktop/Online
         │                                             │
         │  • SSL Termination                         │
         │  • Static File Serving (/excellence/)      │
+        │    - taskpane.html, commands.html          │
+        │    - JavaScript bundles, CSS               │
+        │    - Images, manifest.xml                  │
         │  • API Proxy (/excellence/api/ → :5000)    │
         │  • Windows Service (via NSSM)              │
         └─────────────────────────────────────────────┘
@@ -40,6 +43,47 @@ Excel Desktop/Online
                               │
                               └── Windows Service (via NSSM)
 ```
+
+**How Frontend Hosting Works:**
+- nginx serves all frontend files (HTML, JS, CSS, images) as static content
+- Files are served from `C:\inetpub\wwwroot\ExcelAddin\dist\` directory
+- URL `https://server01.intranet.local:8443/excellence/` loads `dist/taskpane.html`
+- Excel add-in loads in taskpane, makes API calls to `/excellence/api/` endpoints
+- nginx proxies API calls to backend Flask app running on port 5000
+
+## Frontend Deployment Overview
+
+The Excel add-in frontend is a **React-based single-page application** that gets compiled into static files and served by nginx. Here's how it works:
+
+### 1. Frontend Build Process
+```bash
+# Development builds (for testing)
+npm run build:dev          # Development build with source maps
+npm run start              # Development server on https://localhost:3000
+
+# Production builds (for deployment)  
+npm run build:staging      # Production build configured for staging server
+npm run build:prod         # Production build configured for production server
+```
+
+### 2. Frontend Architecture
+- **Entry Points**: `taskpane.tsx` (main interface), `commands.ts` (ribbon commands)
+- **Build Output**: Static HTML, JavaScript bundles, CSS, assets
+- **Hosting**: nginx serves files from `C:\inetpub\wwwroot\ExcelAddin\dist\`
+- **Public Path**: All resources served under `/excellence/` subpath
+
+### 3. Integration with Excel
+- **Manifest File**: `manifest.xml` defines add-in metadata and entry points
+- **Taskpane**: Main interface loads at `https://server:8443/excellence/taskpane.html`  
+- **Commands**: Ribbon commands load at `https://server:8443/excellence/commands.html`
+- **API Communication**: Frontend makes AJAX calls to backend API
+
+### 4. nginx Configuration for Frontend
+The nginx server is configured to:
+- Serve static files from the application directory
+- Handle URL routing for single-page app behavior
+- Proxy API requests to the backend Flask application
+- Provide SSL termination for secure HTTPS access
 
 ## Local Development Setup
 
@@ -143,6 +187,48 @@ cd C:\inetpub\wwwroot\ExcelAddin\backend
 pip install -r requirements.txt
 ```
 
+#### 4. Build and Deploy Frontend
+
+The frontend is a React-based Excel add-in that gets built into static files and served by nginx.
+
+```bash
+# On development machine - Build frontend for staging
+npm install
+npm run build:staging
+
+# This creates a 'dist' directory containing:
+# - taskpane.html (main add-in interface)
+# - commands.html (ribbon commands)
+# - JavaScript bundles with content hashing
+# - functions.json (custom functions metadata)
+# - assets/ (images, icons, etc.)
+# - manifest.xml (copied from manifest-staging.xml)
+```
+
+```powershell
+# Copy built frontend files to Windows server
+# Copy contents of dist/* to C:\inetpub\wwwroot\ExcelAddin\dist\
+
+# Create the dist directory on the server
+New-Item -ItemType Directory -Path "C:\inetpub\wwwroot\ExcelAddin\dist" -Force
+
+# Your server directory should look like:
+# C:\inetpub\wwwroot\ExcelAddin\
+# ├── dist/                    # Frontend files served by nginx
+# │   ├── taskpane.html
+# │   ├── commands.html
+# │   ├── taskpane.[hash].js
+# │   ├── commands.[hash].js
+# │   ├── vendors.[hash].js
+# │   ├── functions.json
+# │   ├── assets/
+# │   └── manifest.xml
+# └── backend/                 # Backend API served by Flask
+#     ├── app.py
+#     ├── requirements.txt
+#     └── ...
+```
+
 ## Step-by-Step Deployment Process
 
 ### Phase 1: SSL Certificate Setup
@@ -233,13 +319,17 @@ Get-Service ExcelAddinBackend, nginx
 
 ```powershell
 # Test backend API directly
-curl http://localhost:5000/api/health
+Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing
 
-# Test through nginx proxy
-curl -k https://localhost:8443/excellence/api/health
+# Test through nginx proxy (skipping certificate check for self-signed certs)
+Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
 
 # Test main application
-curl -k https://localhost:8443/excellence/
+Invoke-WebRequest -Uri "https://localhost:8443/excellence/" -SkipCertificateCheck -UseBasicParsing
+
+# Alternative: Use curl.exe directly (if installed) instead of PowerShell's curl alias
+# curl.exe -k https://localhost:8443/excellence/api/health
+# curl.exe -k https://localhost:8443/excellence/
 ```
 
 ### Phase 7: Deploy to Excel Users
@@ -418,3 +508,62 @@ To deploy at `https://server01.intranet.local:8443/excellence` instead of root:
 - Redistribute manifest to users
 
 This deployment guide covers both local development and Windows Server production scenarios. For troubleshooting deployment issues, refer to the [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md).
+
+## Troubleshooting Common Issues
+
+### PowerShell curl Command Issues
+
+**Problem**: `curl -k https://localhost:8443/excellence/api/health` fails with "A parameter cannot be found that matches parameter name 'k'."
+
+**Cause**: In Windows PowerShell, `curl` is an alias for `Invoke-WebRequest`, which doesn't support the `-k` parameter.
+
+**Solutions**:
+
+```powershell
+# Option 1: Use Invoke-WebRequest with proper PowerShell syntax
+Invoke-WebRequest -Uri "https://localhost:8443/excellence/api/health" -SkipCertificateCheck -UseBasicParsing
+
+# Option 2: Use the actual curl.exe if installed (Git for Windows includes it)
+curl.exe -k https://localhost:8443/excellence/api/health
+
+# Option 3: Remove the curl alias to use real curl (advanced users)
+Remove-Item alias:curl
+curl -k https://localhost:8443/excellence/api/health
+```
+
+**Health Check Script**: Use the provided health check script for comprehensive testing:
+```powershell
+cd C:\inetpub\wwwroot\ExcelAddin
+.\deployment\monitoring\health-check.ps1 -DomainName "localhost:8443" -Detailed
+```
+
+### Frontend Not Loading
+
+**Problem**: Excel add-in loads but shows blank taskpane or errors.
+
+**Troubleshooting Steps**:
+
+1. **Verify frontend files are deployed**:
+```powershell
+# Check that these files exist in the dist directory:
+Test-Path "C:\inetpub\wwwroot\ExcelAddin\dist\taskpane.html"
+Test-Path "C:\inetpub\wwwroot\ExcelAddin\dist\commands.html"  
+Get-ChildItem "C:\inetpub\wwwroot\ExcelAddin\dist\" -Filter "*.js"
+```
+
+2. **Test nginx static file serving**:
+```powershell
+Invoke-WebRequest -Uri "https://localhost:8443/excellence/taskpane.html" -SkipCertificateCheck
+Invoke-WebRequest -Uri "https://localhost:8443/excellence/manifest.xml" -SkipCertificateCheck  
+```
+
+3. **Check browser developer tools** (F12 in Excel):
+   - Look for 404 errors on JavaScript/CSS files
+   - Check console for JavaScript errors
+   - Verify API calls are reaching backend
+
+4. **Verify manifest file URLs** match your server configuration:
+```xml
+<!-- In manifest.xml, ensure URLs match your deployment -->
+<SourceLocation DefaultValue="https://server01.intranet.local:8443/excellence/taskpane.html"/>
+```
