@@ -2,7 +2,7 @@
 # Usage: .\diagnose-connectivity.ps1 [-DomainName "localhost:8443"] [-Detailed]
 
 param(
-    [string]$DomainName = "localhost:9443",
+    [string]$DomainName = "server-vs81t.intranet.local:9443",
     [switch]$Detailed = $false
 )
 

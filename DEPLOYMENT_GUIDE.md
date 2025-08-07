@@ -24,13 +24,13 @@ Excel Desktop/Online
 ```
 Excel Desktop/Online
         │
-        └── https://server01.intranet.local:9443/excellence
+        └── https://server-vs81t.intranet.local:9443/excellence
                     │
                     ▼
         ┌─────────────────────────────────────────────┐
-        │              nginx (Port 9443)              │
+        │            Simple nginx (Port 9443)        │
         │                                             │
-        │  • SSL Termination                         │
+        │  • SSL with server-vs81t certificates      │
         │  • Static File Serving (/excellence/)      │
         │    - taskpane.html, commands.html          │
         │    - JavaScript bundles, CSS               │
@@ -46,8 +46,8 @@ Excel Desktop/Online
 
 **How Frontend Hosting Works:**
 - nginx serves all frontend files (HTML, JS, CSS, images) as static content
-- Files are served from `C:\inetpub\wwwroot\ExcelAddin\dist\` directory
-- URL `https://server01.intranet.local:9443/excellence/` loads `dist/taskpane.html`
+- Files are served from `C:\inetpub\wwwroot\ExcelAddin\dist\` directory  
+- URL `https://server-vs81t.intranet.local:9443/excellence/` loads `dist/taskpane.html`
 - Excel add-in loads in taskpane, makes API calls to `/excellence/api/` endpoints
 - nginx proxies API calls to backend Flask app running on port 5000
 
@@ -371,49 +371,75 @@ if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
 
 ### nginx Configuration (`deployment/nginx/excel-addin.conf`)
 
-Key settings for subpath deployment:
+**Simplified Configuration** - This configuration has been streamlined to focus on just what's needed:
 
 ```nginx
+# Simple nginx configuration for Excel Add-in
+upstream backend_api {
+    server 127.0.0.1:5000;
+}
+
+# Main HTTPS server
 server {
     listen 9443 ssl;
-    server_name server01.intranet.local;
+    server_name server-vs81t.intranet.local 192.168.77.251;
     
-    # SSL Configuration
-    ssl_certificate C:/Cert/server.crt;
-    ssl_private_key C:/Cert/server.key;
+    # SSL certificates for server-vs81t
+    ssl_certificate C:/Cert/server-vs81t.crt;
+    ssl_certificate_key C:/Cert/server-vs81t.key;
     
-    # Serve app at /excellence/
-    location /excellence/ {
-        alias C:/inetpub/wwwroot/ExcelAddin/;
-        try_files $uri $uri/ @fallback;
+    # Basic SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    
+    # CORS headers for Excel add-in
+    add_header Access-Control-Allow-Origin "*" always;
+    
+    # API proxy - remove /excellence prefix and forward to Flask backend
+    location /excellence/api/ {
+        rewrite ^/excellence/api/(.*) /api/$1 break;
+        proxy_pass http://backend_api;
+        proxy_set_header Host $host;
     }
     
-    # Proxy API calls to backend  
-    location /excellence/api/ {
-        proxy_pass http://127.0.0.1:5000/api/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+    # Serve static files from dist directory
+    location /excellence/ {
+        alias C:/inetpub/wwwroot/ExcelAddin/dist/;
+        index taskpane.html;
+    }
+    
+    # Health check
+    location /health {
+        return 200 "OK";
+        add_header Content-Type text/plain;
     }
 }
 ```
+
+**Key Features of the Simplified Configuration:**
+- **Minimal complexity** - Only essential directives
+- **Correct certificate names** - Uses `server-vs81t.crt` and `server-vs81t.key`
+- **Both server names** - Supports both `server-vs81t.intranet.local` and `192.168.77.251`
+- **Simple proxy** - Direct API forwarding without complex rules
+- **Basic CORS** - Just what Excel add-in needs
+- **No rate limiting** - Removed complexity that could cause issues
 
 ### Backend Environment (`.env.production`)
 
 ```bash
 FLASK_ENV=production
 FLASK_DEBUG=False
-API_BASE_URL=https://server01.intranet.local:9443/excellence/api
-CORS_ORIGINS=https://server01.intranet.local:9443
+API_BASE_URL=https://server-vs81t.intranet.local:9443/excellence/api
+CORS_ORIGINS=https://server-vs81t.intranet.local:9443
 DATABASE_CONFIG=database.cfg
 ```
 
 ### Excel Manifest (`manifest-staging.xml`)
 
 ```xml
-<SourceLocation DefaultValue="https://server01.intranet.local:9443/excellence/taskpane.html"/>
-<SupportUrl DefaultValue="https://server01.intranet.local:9443/excellence/"/>
+<SourceLocation DefaultValue="https://server-vs81t.intranet.local:9443/excellence/taskpane.html"/>
+<SupportUrl DefaultValue="https://server-vs81t.intranet.local:9443/excellence/"/>
 <AppDomains>
-  <AppDomain>https://server01.intranet.local:9443</AppDomain>
+  <AppDomain>https://server-vs81t.intranet.local:9443</AppDomain>
 </AppDomains>
 ```
 
@@ -451,6 +477,68 @@ openssl rsa -in C:\Cert\server.key -check
 .\deployment\scripts\validate-nginx-config.ps1
 ```
 
+## Testing and Debugging
+
+### New Simplified Testing Scripts
+
+**Test nginx Configuration**
+```powershell
+# Test the simplified nginx configuration
+.\deployment\scripts\test-nginx-simple.ps1
+
+# This script checks:
+# - nginx executable exists
+# - Configuration syntax is valid  
+# - Required directories exist
+# - SSL certificates are present
+# - Port 9443 availability
+```
+
+**Test Backend Standalone (Outside NSSM)**
+```powershell
+# Run Flask backend directly for debugging
+.\deployment\scripts\test-backend-standalone.ps1
+
+# This allows you to:
+# - Debug backend issues without NSSM service wrapper
+# - See Python error messages directly
+# - Test backend API endpoints manually
+# - Validate Flask configuration
+```
+
+**Enhanced Connectivity Diagnostics**
+```powershell
+# Comprehensive connectivity testing
+.\deployment\scripts\diagnose-connectivity.ps1 -DomainName "server-vs81t.intranet.local:9443" -Detailed
+
+# Updated to test:
+# - Correct server name (server-vs81t)
+# - Port 9443 connectivity
+# - SSL certificate validation
+# - Frontend file deployment
+# - Firewall rules
+```
+
+### Development Server vs nginx Comparison
+
+| Aspect | npm start (Dev Server) | nginx Production |
+|--------|------------------------|------------------|
+| **URL** | `https://localhost:3000` | `https://server-vs81t.intranet.local:9443/excellence` |
+| **SSL** | Self-signed development cert | Production server-vs81t certificates |
+| **Hot Reload** | ✅ Automatic code reload | ❌ Must rebuild and deploy |
+| **API Proxy** | Built into webpack dev server | nginx proxy to port 5000 |
+| **Purpose** | Development and testing | Production deployment |
+| **Debugging** | Easy to debug frontend issues | Use test scripts for debugging |
+
+### Troubleshooting Common Issues
+
+**When nginx doesn't work but npm start does:**
+1. Run `.\deployment\scripts\test-nginx-simple.ps1` to validate setup
+2. Check certificate files are named `server-vs81t.crt` and `server-vs81t.key` 
+3. Verify frontend files exist in `C:\inetpub\wwwroot\ExcelAddin\dist\`
+4. Test backend separately with `.\deployment\scripts\test-backend-standalone.ps1`
+5. Run nginx configuration syntax test: `C:\nginx\nginx.exe -t` (from C:\nginx directory)
+
 ## Service Management
 
 ### Essential PowerShell Scripts (in deployment/scripts/)
@@ -461,6 +549,9 @@ openssl rsa -in C:\Cert\server.key -check
 | `setup-nginx-service.ps1` | Install/configure nginx Windows service | Run once during deployment |
 | `diagnose-backend-service.ps1` | Troubleshoot backend service issues | Use when service fails to start |
 | `diagnose-connectivity.ps1` | **Comprehensive connectivity diagnostics** | **Use when nginx is running but website not accessible** |
+| `test-nginx-simple.ps1` | **Test simplified nginx configuration** | **Use before starting nginx** |
+| `test-backend-standalone.ps1` | **Run Flask backend outside NSSM for debugging** | **Use when backend issues occur** |
+| `add-firewall-rule.ps1` | **Automatically add Windows Firewall rule for port 9443** | **Run as Administrator** |
 | `validate-nginx-config.ps1` | Test nginx configuration | Use before starting nginx |
 | `handle-encrypted-key.ps1` | Convert encrypted SSL keys | Use if SSL keys require passwords |
 | `extract-pfx.ps1` | Extract certificates from PFX files | Use with PFX certificate files |
@@ -514,7 +605,7 @@ nssm set nginx AppParameters "-g \"daemon off;\""
 
 ## Subpath Deployment Configuration
 
-To deploy at `https://server01.intranet.local:9443/excellence` instead of root:
+To deploy at `https://server-vs81t.intranet.local:9443/excellence` instead of root:
 
 ### 1. nginx Configuration
 - Set location blocks for `/excellence/` and `/excellence/api/`
@@ -687,5 +778,5 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
 4. **Verify manifest file URLs** match your server configuration:
 ```xml
 <!-- In manifest.xml, ensure URLs match your deployment -->
-<SourceLocation DefaultValue="https://server01.intranet.local:9443/excellence/taskpane.html"/>
+<SourceLocation DefaultValue="https://server-vs81t.intranet.local:9443/excellence/taskpane.html"/>
 ```
