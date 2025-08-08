@@ -110,6 +110,18 @@ try {
     $deployedFiles = Get-ChildItem $ExcellenceDir -Recurse -File
     Write-Host "   Deployed $($deployedFiles.Count) files to IIS" -ForegroundColor Green
     
+    # Step 3.1: Update web.config (ensure latest version is deployed)
+    Write-Host "   Updating web.config..." -ForegroundColor Yellow
+    $webConfigSource = Join-Path $PSScriptRoot "..\iis\web.config"
+    $webConfigDest = Join-Path $WebsiteRoot "web.config"
+    
+    if (Test-Path $webConfigSource) {
+        Copy-Item $webConfigSource $webConfigDest -Force
+        Write-Host "   ✓ Updated web.config to latest version" -ForegroundColor Green
+    } else {
+        Write-Warning "   web.config not found at: $webConfigSource"
+    }
+    
     # Check for key files
     $keyFiles = @("taskpane.html", "commands.html")
     foreach ($file in $keyFiles) {

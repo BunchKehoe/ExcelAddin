@@ -521,6 +521,16 @@ npm run build:staging
 # Deploy to existing IIS (run as Administrator)
 .\deployment\scripts\deploy-to-existing-iis.ps1
 
+# Build and deploy application
+.\deployment\scripts\build-and-deploy-iis.ps1
+
+# Fix any configuration issues (if needed)
+.\deployment\scripts\fix-iis-config.ps1
+
+# Test configuration
+.\deployment\scripts\test-iis-simple.ps1
+```
+
 # Test IIS configuration
 .\deployment\scripts\test-iis-simple.ps1
 ```
@@ -626,6 +636,26 @@ Get-WebBinding -Name "ExcelAddin"
 | **Management** | Command line (npm) | IIS Manager or PowerShell |
 
 ### Troubleshooting Common Issues
+
+**HTTP Error 500.19 - Configuration Section Locked:**
+This is the most common issue when migrating from nginx to IIS or updating web.config.
+
+**Error symptoms:**
+- `Config Error: This configuration section cannot be used at this path`
+- Error Code `0x80070021` 
+- References to `<handlers>` section in web.config
+
+**Quick Fix:**
+```powershell
+# Run as Administrator
+.\deployment\scripts\fix-iis-config.ps1
+```
+
+This script automatically:
+- Backs up your current web.config
+- Deploys the latest compatible configuration
+- Removes problematic `<handlers>` section
+- Tests the configuration
 
 **When IIS doesn't work but npm start does:**
 1. Run `.\deployment\scripts\test-iis-simple.ps1` to validate setup
