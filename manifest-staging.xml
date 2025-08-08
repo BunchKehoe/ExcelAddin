@@ -53,6 +53,11 @@ Update the domain names and GUID before deployment.
     <Hosts>
       <Host xsi:type="Workbook">
         <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
+          </GetStarted>
           <!-- Function file for custom functions -->
           <FunctionFile resid="Commands.Url"/>
           
@@ -87,6 +92,19 @@ Update the domain names and GUID before deployment.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          <!-- Custom Functions -->
+          <ExtensionPoint xsi:type="CustomFunctions">
+            <Script>
+              <SourceLocation resid="Commands.Url"/>
+            </Script>
+            <Page>
+              <SourceLocation resid="Commands.Url"/>
+            </Page>
+            <Metadata>
+              <SourceLocation resid="Functions.Metadata.Url"/>
+            </Metadata>
+            <Namespace resid="CustomFunctions.Namespace"/>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -99,14 +117,19 @@ Update the domain names and GUID before deployment.
         <bt:Image id="Icon.80x80" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs81t.intranet.local:9443/excellence"/>
         <bt:Url id="Commands.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/commands.html"/>
+        <bt:Url id="Functions.Metadata.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/functions.json"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="Get started with PrimeExcelence"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="PrimeExcelence"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Taskpane"/>
+        <bt:String id="CustomFunctions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="Your PrimeExcelence add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
         <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open PrimeExcelence task pane for financial data management"/>
       </bt:LongStrings>
     </Resources>
