@@ -1,6 +1,15 @@
 # PrimeExcelence Excel Add-in
 
-A comprehensive Excel JavaScript add-in built with modern web technologies (TypeScript, React, Material UI) that provides a sophisticated sidebar interface for financial data management, applications, dashboards, and Excel functions.
+A comprehensive Excel JavaScript add-in built with modern web technologies (TypeScript, React, Material UI) that provides a sophisticated sidebar interface for financial data management, applications, dashboards, and custom Excel functions.
+
+## ✨ Features
+
+- **📊 Task Pane Interface** - Modern React-based UI with Material-UI components
+- **🧮 Custom Functions** - Two powerful custom functions available in Excel:
+  - `PC.AGGIRR(expectedFutureValue, originalBeginningValue)` - Calculate aggregate IRR
+  - `PC.JOINCELLS(range, delimiter)` - Join cell ranges with custom delimiters
+- **🔧 Multi-Environment Support** - Configured for local development, staging, and production
+- **🚀 Modern Build System** - Webpack-based with TypeScript, hot reloading, and optimized production builds
 
 ## Quick Start
 
@@ -10,27 +19,35 @@ A comprehensive Excel JavaScript add-in built with modern web technologies (Type
 npm install
 cd backend && pip install -r requirements.txt
 
-# 2. Start services
-cd backend && python run.py  # Terminal 1
-npm start                     # Terminal 2
+# 2. Start development server
+npm run dev                    # Runs on https://localhost:3000
 
 # 3. Load in Excel
 # Developer tab → Add-ins → Upload manifest.xml
 ```
 
-### For Windows Server Production
+### Testing Custom Functions
+Once loaded in Excel, try these examples:
+```excel
+=PC.AGGIRR(150, 100)           # Returns 1.5
+=PC.JOINCELLS(A1:A5, " | ")    # Joins A1-A5 with " | "
+```
+
+## 🌍 Environment Support
+
+| Environment | URL | Manifest | Build Command |
+|-------------|-----|----------|---------------|
+| **Local Development** | https://localhost:3000 | `manifest.xml` | `npm run build:dev` |
+| **Staging** | https://server-vs81t.intranet.local:9443/excellence/ | `manifest-staging.xml` | `npm run build:staging` |
+| **Production** | https://server-vs84.intranet.local:9443/excellence/ | `manifest-prod.xml` | `npm run build:prod` |
+
+### For Staging/Production Deployment
 ```powershell
-# 1. Build and deploy files
-npm run build:staging
-# Copy dist/ and backend/ to server
+# Build for specific environment
+npm run build:staging    # or npm run build:prod
 
-# 2. Run setup scripts (as Administrator)
-.\deployment\scripts\setup-backend-service.ps1
-.\deployment\scripts\setup-nginx-service.ps1
-
-# 3. Start services
-Start-Service ExcelAddinBackend
-Start-Service nginx
+# Deploy to IIS (run as Administrator)
+.\deployment\scripts\build-and-deploy-iis.ps1
 ```
 
 ## Documentation

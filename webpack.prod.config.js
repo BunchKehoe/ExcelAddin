@@ -4,6 +4,8 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
+  const isStaging = env && env.staging;
+  const isProd = env && env.production;
   
   return {
     mode: isProduction ? 'production' : 'development',
@@ -88,12 +90,21 @@ module.exports = (env, argv) => {
             to: 'assets',
             noErrorOnMissing: true
           },
-          {
+          // Copy the appropriate manifest file based on environment
+          isProd ? {
+            from: './manifest-prod.xml',
+            to: 'manifest.xml',
+            noErrorOnMissing: true
+          } : isStaging ? {
             from: './manifest-staging.xml',
             to: 'manifest.xml',
             noErrorOnMissing: true
+          } : {
+            from: './manifest.xml',
+            to: 'manifest.xml',
+            noErrorOnMissing: true
           }
-        ]
+        ].filter(Boolean)
       })
     ],
     optimization: {

@@ -1,25 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+Local Development Manifest for Excel Add-in
+This manifest should be used for local development only.
+Uses localhost:3000 for all resource URLs.
+-->
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xsi:type="TaskPaneApp">
+  
+  <!-- Unique ID for your local development environment -->
   <Id>12345678-1234-1234-1234-123456789012</Id>
+  
+  <!-- Version information -->
   <Version>1.0.0.0</Version>
+  
+  <!-- Provider information -->
   <ProviderName>PrimeExcelence</ProviderName>
+  
+  <!-- Default locale -->
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="PrimeExcelence"/>
-  <Description DefaultValue="Excel JS Addin for PrimeExcelence"/>
+  
+  <!-- Display name -->
+  <DisplayName DefaultValue="PrimeExcelence (Local Development)"/>
+  <Description DefaultValue="Excel Add-in for financial data management - Local Development Environment"/>
+  
+  <!-- Icons -->
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  
+  <!-- Support and help URLs -->
   <SupportUrl DefaultValue="https://localhost:3000"/>
   <AppDomains>
     <AppDomain>https://localhost:3000</AppDomain>
   </AppDomains>
+  
+  <!-- Hosts -->
   <Hosts>
     <Host Name="Workbook"/>
   </Hosts>
+  
+  <!-- Default settings -->
   <DefaultSettings>
     <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
   </DefaultSettings>
+  
+  <!-- Permissions -->
   <Permissions>ReadWriteDocument</Permissions>
+  
+  <!-- Version overrides for different Office versions -->
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
     <Hosts>
       <Host xsi:type="Workbook">
@@ -29,7 +57,10 @@
             <Description resid="GetStarted.Description"/>
             <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
           </GetStarted>
+          <!-- Function file for custom functions -->
           <FunctionFile resid="Commands.Url"/>
+          
+          <!-- Extension points -->
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
               <Group id="CommandsGroup">
@@ -39,6 +70,8 @@
                   <bt:Image size="32" resid="Icon.32x32"/>
                   <bt:Image size="80" resid="Icon.80x80"/>
                 </Icon>
+                
+                <!-- Task pane button -->
                 <Control xsi:type="Button" id="TaskpaneButton">
                   <Label resid="TaskpaneButton.Label"/>
                   <Supertip>
@@ -74,6 +107,8 @@
         </DesktopFormFactor>
       </Host>
     </Hosts>
+    
+    <!-- Resources -->
     <Resources>
       <bt:Images>
         <bt:Image id="Icon.16x16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
@@ -93,8 +128,8 @@
         <bt:String id="CustomFunctions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Click to Show the Taskpane"/>
+        <bt:String id="GetStarted.Description" DefaultValue="Your PrimeExcelence add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open PrimeExcelence task pane for financial data management"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>
