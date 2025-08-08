@@ -33,7 +33,8 @@ if ($ExistingIIS) {
 # Variables
 $SiteName = "ExcelAddin"
 $AppPoolName = "ExcelAddinAppPool"
-$PhysicalPath = "C:\inetpub\wwwroot\ExcelAddin\dist"
+$WebsiteRoot = "C:\inetpub\wwwroot\ExcelAddin"
+$PhysicalPath = $WebsiteRoot
 $Port = 9443
 $CertPath = "C:\Cert\server-vs81t.crt"
 $KeyPath = "C:\Cert\server-vs81t.key"

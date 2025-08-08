@@ -31,7 +31,8 @@ Write-Host "Deploying Excel Add-in to existing IIS server..." -ForegroundColor G
 
 # Variables
 $AppPoolName = "${SiteName}AppPool"
-$PhysicalPath = "C:\inetpub\wwwroot\$SiteName\dist"
+$WebsiteRoot = "C:\inetpub\wwwroot\$SiteName"
+$PhysicalPath = $WebsiteRoot
 $CertPath = "C:\Cert\server-vs81t.crt"
 $KeyPath = "C:\Cert\server-vs81t.key"
 $ServerName = "server-vs81t.intranet.local"
@@ -49,14 +50,24 @@ try {
         exit 1
     }
 
-    # Step 2: Create physical directory
-    Write-Host "2. Setting up physical directory..." -ForegroundColor Cyan
+    # Step 2: Create directory structure
+    Write-Host "2. Setting up directory structure..." -ForegroundColor Cyan
     
+    # Create main website root directory
     if (-not (Test-Path $PhysicalPath)) {
         New-Item -ItemType Directory -Path $PhysicalPath -Force
         Write-Host "   Created directory: $PhysicalPath" -ForegroundColor Green
     } else {
         Write-Host "   Directory already exists: $PhysicalPath" -ForegroundColor Green
+    }
+    
+    # Create excellence subdirectory for React app
+    $ExcellencePath = Join-Path $PhysicalPath "excellence"
+    if (-not (Test-Path $ExcellencePath)) {
+        New-Item -ItemType Directory -Path $ExcellencePath -Force
+        Write-Host "   Created directory: $ExcellencePath" -ForegroundColor Green
+    } else {
+        Write-Host "   Directory already exists: $ExcellencePath" -ForegroundColor Green
     }
 
     # Step 3: Configure application pool
@@ -113,9 +124,10 @@ try {
         Write-Host "   Created website '$SiteName' on port $Port" -ForegroundColor Green
     }
 
-    # Step 5: Copy web.config
-    Write-Host "5. Configuring web.config..." -ForegroundColor Cyan
+    # Step 5: Configure web.config and copy files
+    Write-Host "5. Configuring web.config and preparing file structure..." -ForegroundColor Cyan
     
+    # Copy web.config to root directory
     $webConfigSource = Join-Path $PSScriptRoot "..\iis\web.config"
     $webConfigDest = Join-Path $PhysicalPath "web.config"
     
@@ -125,6 +137,20 @@ try {
     } else {
         Write-Error "web.config not found at: $webConfigSource"
         Write-Host "   Please ensure web.config is available in the deployment/iis directory" -ForegroundColor Yellow
+    }
+    
+    # Check if dist directory exists and suggest copying files
+    $DistPath = Join-Path (Get-Location).Path "dist"
+    if (Test-Path $DistPath) {
+        Write-Host "   Found dist directory at: $DistPath" -ForegroundColor Green
+        Write-Host "   Copying dist files to excellence directory..." -ForegroundColor Cyan
+        
+        # Copy all files from dist to excellence directory
+        Copy-Item -Path "$DistPath\*" -Destination $ExcellencePath -Recurse -Force
+        Write-Host "   Copied all dist files to $ExcellencePath" -ForegroundColor Green
+    } else {
+        Write-Host "   dist directory not found. Run 'npm run build:staging' first" -ForegroundColor Yellow
+        Write-Host "   Then copy dist/* files to: $ExcellencePath" -ForegroundColor Yellow
     }
 
     # Step 6: Configure SSL (if certificate exists)
@@ -209,7 +235,7 @@ try {
     Write-Host "Health check: https://$ServerName`:$Port/health" -ForegroundColor Cyan
     Write-Host "`nNext steps:" -ForegroundColor Yellow
     Write-Host "1. Build frontend: npm run build:staging" -ForegroundColor White
-    Write-Host "2. Copy dist/* files to: $PhysicalPath" -ForegroundColor White
+    Write-Host "2. Files are automatically copied to: $ExcellencePath" -ForegroundColor White
     Write-Host "3. Test: https://$ServerName`:$Port/excellence/taskpane.html" -ForegroundColor White
     Write-Host "4. Start Flask backend on port 5000" -ForegroundColor White
 

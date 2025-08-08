@@ -47,14 +47,14 @@ Excel Desktop/Online
 
 **How Frontend Hosting Works:**
 - IIS serves all frontend files (HTML, JS, CSS, images) as static content
-- Files are served from `C:\inetpub\wwwroot\ExcelAddin\dist\` directory  
-- URL `https://server-vs81t.intranet.local:9443/excellence/` loads `dist/taskpane.html`
+- Files are served from `C:\inetpub\wwwroot\ExcelAddin\excellence\` directory  
+- URL `https://server-vs81t.intranet.local:9443/excellence/` loads `excellence/taskpane.html`
 - Excel add-in loads in taskpane, makes API calls to `/excellence/api/` endpoints
 - IIS URL Rewrite with ARR proxies API calls to backend Flask app running on port 5000
 
 ## Frontend Deployment Overview
 
-The Excel add-in frontend is a **React-based single-page application** that gets compiled into static files and served by nginx. Here's how it works:
+The Excel add-in frontend is a **React-based single-page application** that gets compiled into static files and served by IIS. Here's how it works:
 
 ### 1. Frontend Build Process
 ```bash
@@ -70,7 +70,7 @@ npm run build:prod         # Production build configured for production server
 ### 2. Frontend Architecture
 - **Entry Points**: `taskpane.tsx` (main interface), `commands.ts` (ribbon commands)
 - **Build Output**: Static HTML, JavaScript bundles, CSS, assets
-- **Hosting**: nginx serves files from `C:\inetpub\wwwroot\ExcelAddin\dist\`
+- **Hosting**: IIS serves files from `C:\inetpub\wwwroot\ExcelAddin\excellence\`
 - **Public Path**: All resources served under `/excellence/` subpath
 
 ### 3. Integration with Excel

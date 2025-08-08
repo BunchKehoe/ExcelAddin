@@ -72,10 +72,16 @@ Test-Step "Checking port $Port listening" {
 
 # Test 4: Check physical path exists
 Test-Step "Checking physical path" {
-    $physicalPath = "C:\inetpub\wwwroot\ExcelAddin\dist"
+    $physicalPath = "C:\inetpub\wwwroot\ExcelAddin"
+    $excellencePath = "C:\inetpub\wwwroot\ExcelAddin\excellence"
+    
     if (Test-Path $physicalPath) {
-        $fileCount = (Get-ChildItem $physicalPath -Recurse -File).Count
-        return "Physical path exists with $fileCount files"
+        if (Test-Path $excellencePath) {
+            $fileCount = (Get-ChildItem $excellencePath -Recurse -File).Count
+            return "Physical path exists with excellence subdirectory ($fileCount files)"
+        } else {
+            throw "Physical path exists but excellence subdirectory is missing: $excellencePath"
+        }
     } else {
         throw "Physical path does not exist: $physicalPath"
     }
@@ -83,9 +89,9 @@ Test-Step "Checking physical path" {
 
 # Test 5: Check web.config exists
 Test-Step "Checking web.config" {
-    $webConfigPath = "C:\inetpub\wwwroot\ExcelAddin\dist\web.config"
+    $webConfigPath = "C:\inetpub\wwwroot\ExcelAddin\web.config"
     if (Test-Path $webConfigPath) {
-        return "web.config exists"
+        return "web.config exists in root directory"
     } else {
         throw "web.config not found at: $webConfigPath"
     }
