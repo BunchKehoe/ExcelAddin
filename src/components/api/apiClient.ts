@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://server01.intranet.local:8443/excellence/api';
+const API_BASE_URL = 'https://server-vs81t.intranet.local:9443/excellence/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
