@@ -259,6 +259,8 @@ cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
 
 ### Phase 2: Configure IIS
 
+#### Option A: New IIS Installation
+
 ```powershell
 # Run as Administrator
 cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
@@ -273,6 +275,29 @@ cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
 # - Set up web.config for static files and API proxying
 # - Configure Windows Firewall
 ```
+
+#### Option B: Existing IIS Server (Recommended)
+
+If you already have IIS installed and running, use the lightweight deployment script:
+
+```powershell
+# Run as Administrator
+cd C:\inetpub\wwwroot\ExcelAddin\deployment\scripts
+
+# Deploy to existing IIS server
+.\deploy-to-existing-iis.ps1
+
+# Or with custom parameters:
+.\deploy-to-existing-iis.ps1 -Force -SiteName "MyExcelApp" -Port 8443
+
+# This script will:
+# - Create application pool and website for Excel Add-in
+# - Configure SSL if certificates are available
+# - Set up web.config and permissions
+# - Skip IIS feature installation (works with existing IIS)
+```
+
+**Use Option B if you get errors about IIS already running or features already installed.**
 
 ### Phase 3: Set Up Backend Service
 
@@ -468,6 +493,7 @@ DATABASE_CONFIG=database.cfg
 
 ### IIS Quick Start
 
+#### For New IIS Installation:
 ```bash
 # Apply library upgrades (if not done)
 cd backend
@@ -481,9 +507,22 @@ npm run build:staging
 
 # Test IIS configuration
 .\deployment\scripts\test-iis-simple.ps1
+```
 
-# Comprehensive connectivity diagnostics
-.\deployment\scripts\diagnose-connectivity.ps1 -DomainName "server-vs81t.intranet.local:9443" -Detailed
+#### For Existing IIS Server (Recommended):
+```bash
+# Apply library upgrades (if not done)
+cd backend
+pip install -r requirements.txt --upgrade
+
+# Build frontend
+npm run build:staging
+
+# Deploy to existing IIS (run as Administrator)
+.\deployment\scripts\deploy-to-existing-iis.ps1
+
+# Test IIS configuration
+.\deployment\scripts\test-iis-simple.ps1
 ```
 
 ### Manual IIS Module Installation
@@ -609,7 +648,8 @@ Get-WebBinding -Name "ExcelAddin"
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | `setup-backend-service.ps1` | Install/configure backend Windows service | Run once during deployment |
-| `setup-iis.ps1` | **Install/configure IIS with Excel Add-in site** | **Run once during deployment** |
+| `setup-iis.ps1` | **Install/configure IIS with Excel Add-in site** | **For new IIS installations** |
+| `deploy-to-existing-iis.ps1` | **Deploy Excel Add-in to existing IIS server** | **For existing IIS installations (recommended)** |
 | `migrate-nginx-to-iis.ps1` | **Migrate from nginx to IIS** | **Use to switch from nginx to IIS** |
 | `test-iis-simple.ps1` | **Test IIS configuration and connectivity** | **Use to validate IIS setup** |
 | `diagnose-backend-service.ps1` | Troubleshoot backend service issues | Use when service fails to start |
