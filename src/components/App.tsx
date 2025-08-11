@@ -141,7 +141,7 @@ const App: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
               <Box
                 component="img"
-                src="/assets/icon-16.svg"
+                src="assets/icon-16.svg"
                 alt="Prime Logo"
                 sx={{
                   height: 24,

@@ -105,18 +105,18 @@ This project includes comprehensive documentation organized into three main guid
 ### Backend
 - **Python 3.x + Flask**: REST API service
 - **Poetry**: Dependency management and virtual environment
-- **Windows Service**: Runs as Windows service via NSSM
+- **IIS Integration**: Runs directly in IIS using FastCGI
 - **Configuration**: Environment-based configuration
 
 ### Production Infrastructure  
-- **nginx**: Reverse proxy with SSL termination
-- **NSSM**: Service management for Windows
+- **IIS**: Web server hosting both frontend and backend
+- **FastCGI**: Python integration for IIS
 - **SSL/TLS**: Enterprise certificate support
 
 ## Deployment Scenarios
 
 - **Local Development**: `https://localhost:3000` with self-signed certificates
-- **Windows Server Production**: nginx reverse proxy with enterprise SSL certificates, subpath support (e.g., `/excellence`), and Windows service management
+- **Windows Server Production**: IIS hosting both frontend and backend with enterprise SSL certificates, subpath support (e.g., `/excellence`), and integrated Python FastCGI support
 
 ## Support
 

@@ -64,11 +64,11 @@ The add-in consists of two main components:
 - **Excel Integration**: Sideloaded manifest for testing
 
 ### Production/Staging - Windows Server
-- **Frontend**: Static files served by nginx reverse proxy
-- **Backend**: Python Flask app running as Windows service (via NSSM)
-- **Proxy**: nginx handles SSL termination and request routing
+- **Frontend**: Static files served by IIS
+- **Backend**: Python Flask app running directly in IIS via FastCGI
+- **Integration**: IIS handles both frontend and backend with unified configuration
 - **SSL**: Enterprise certificates from company CA
-- **Service Management**: NSSM (Non-Sucking Service Manager) for service orchestration
+- **Service Management**: IIS application pool management for both components
 
 ## File Structure
 
@@ -81,10 +81,11 @@ ExcelAddin/
 │   └── taskpane/               # Task pane entry point
 ├── backend/                     # Python backend
 │   ├── src/                    # Python source code
-│   ├── service_wrapper.py      # Windows service wrapper
+│   ├── wsgi_app.py            # IIS WSGI entry point
+│   ├── web.config             # IIS configuration for backend
 │   └── run.py                  # Development server
 ├── deployment/                  # Deployment configuration
-│   ├── nginx/                  # nginx configuration files
+│   ├── iis/                    # IIS configuration files
 │   ├── scripts/                # PowerShell deployment scripts
 │   └── ssl/                    # SSL certificate templates
 ├── dist/                       # Built frontend files (generated)
@@ -135,15 +136,15 @@ ExcelAddin/
 ### Quick Start - Windows Server Production
 
 1. **Prepare environment**:
-   - Install nginx, Python, NSSM
+   - Install IIS with FastCGI support, Python
    - Configure SSL certificates
    - Build application (`npm run build:staging`)
 
 2. **Deploy using scripts**:
    ```powershell
    # Run as Administrator
-   .\deployment\scripts\setup-backend-service.ps1
-   .\deployment\scripts\setup-nginx-service.ps1
+   .\deployment\scripts\setup-backend-iis.ps1
+   .\deployment\scripts\setup-iis.ps1
    ```
 
 3. **Configure Excel**:

@@ -19,10 +19,15 @@ Essential scripts for deploying the Excel Add-in to Windows IIS.
 **Usage:** `.\test-iis-simple.ps1`  
 **Requirements:** None (read-only testing)
 
-### setup-backend-service.ps1
-**Purpose:** Install Flask backend as Windows service  
-**Usage:** `.\setup-backend-service.ps1`  
-**Requirements:** Run as Administrator, NSSM available
+### setup-backend-iis.ps1
+**Purpose:** Install Flask backend directly in IIS using FastCGI  
+**Usage:** `.\setup-backend-iis.ps1`  
+**Requirements:** Run as Administrator, IIS with FastCGI support
+
+### setup-backend-service.ps1 (DEPRECATED)
+**Purpose:** ~~Install Flask backend as Windows service~~ **DEPRECATED - Use setup-backend-iis.ps1 instead**  
+**Usage:** ~~`.\setup-backend-service.ps1`~~ **Redirects to setup-backend-iis.ps1**  
+**Requirements:** ~~Run as Administrator, NSSM available~~ **No longer required**
 
 ### add-firewall-rule.ps1
 **Purpose:** Open Windows Firewall for port 9443  
@@ -37,9 +42,12 @@ For existing IIS servers:
 # 1. Setup (run once)
 .\deploy-to-existing-iis.ps1
 
-# 2. Deploy app
+# 2. Setup backend in IIS
+.\setup-backend-iis.ps1
+
+# 3. Deploy app  
 .\build-and-deploy-iis.ps1
 
-# 3. Test
+# 4. Test
 .\test-iis-simple.ps1
 ```
