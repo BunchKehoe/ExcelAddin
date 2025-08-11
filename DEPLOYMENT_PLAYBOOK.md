@@ -4,11 +4,19 @@ This playbook covers deployment procedures for all environments: Local Developme
 
 ## Environment Overview
 
-| Environment | URL | Manifest | Build Command |
-|-------------|-----|----------|---------------|
-| **Local Development** | https://localhost:3000 | manifest.xml | `npm run build:dev` |
-| **Staging** | https://server-vs81t.intranet.local:9443/excellence/ | manifest-staging.xml | `npm run build:staging` |
-| **Production** | https://server-vs84.intranet.local:9443/excellence/ | manifest-prod.xml | `npm run build:prod` |
+The Excel Add-in uses dynamic environment detection to automatically configure API endpoints based on the hostname:
+
+| Environment | URL | API Endpoint | Manifest | Build Command |
+|-------------|-----|--------------|----------|---------------|
+| **Local Development** | https://localhost:3000 | http://localhost:5000/api | manifest.xml | `npm run build:dev` |
+| **Staging** | https://server-vs81t.intranet.local:9443/excellence/ | https://server-vs81t.intranet.local:9443/excellence/api | manifest-staging.xml | `npm run build:staging` |
+| **Production** | https://server-vs84.intranet.local:9443/excellence/ | https://server-vs84.intranet.local:9443/excellence/api | manifest-prod.xml | `npm run build:prod` |
+
+### Dynamic Configuration
+- **Environment Detection**: Automatically detects environment based on browser hostname
+- **API Endpoints**: Dynamically configured - no hardcoded staging URLs in source code
+- **Local Development**: Uses local backend server (`http://localhost:5000/api`) for fully offline development
+- **Staging/Production**: Uses respective environment APIs automatically
 
 ## Features Included
 
@@ -69,15 +77,26 @@ npm run cert:install
 npm run cert:verify
 ```
 
-#### Step 3: Start Development Server
+#### Step 3: Start Development Servers
+
+**Frontend Development Server:**
 ```bash
 # Start development server with HTTPS
-npm run dev
+npm run dev                    # Runs on https://localhost:3000
 # or
 npm start
 ```
 
 The development server will automatically use the SSL certificates from `~/.office-addin-dev-certs/` for secure HTTPS connections required by Office Add-ins.
+
+**Backend API Server (optional, for API features):**
+```bash
+# In a separate terminal, start the backend server  
+cd backend
+python -m flask run --port=5000
+```
+
+The frontend will automatically detect the local environment and use `http://localhost:5000/api` for API calls instead of staging servers, enabling fully local development without network dependencies.
 
 ### Development URLs
 - **Frontend:** https://localhost:3000

@@ -1,14 +1,24 @@
 import axios from 'axios';
-
-const API_BASE_URL = 'https://server-vs81t.intranet.local:9443/excellence/api';
+import { apiBaseUrl, environment } from '../../config/environment';
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: apiBaseUrl,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor for debugging in development
+if (environment === 'development') {
+  apiClient.interceptors.request.use(request => {
+    console.log('🌐 API Request:', request.method?.toUpperCase(), request.url, {
+      baseURL: request.baseURL,
+      data: request.data
+    });
+    return request;
+  });
+}
 
 interface DownloadDataParams {
   fund: string;
