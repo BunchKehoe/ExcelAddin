@@ -11,7 +11,7 @@ backend/
 ├── app.py                 # Main Flask application
 ├── run.py                 # Development server entry point
 ├── service_wrapper.py     # Windows service wrapper
-├── requirements.txt       # Python dependencies
+├── pyproject.toml         # Python dependencies and Poetry configuration
 └── database.cfg          # Database configuration
 ```
 
@@ -20,7 +20,8 @@ backend/
 ### Local Development
 ```bash
 cd backend
-pip install -r requirements.txt
+poetry install
+poetry shell
 python run.py
 ```
 API available at `http://localhost:5000`

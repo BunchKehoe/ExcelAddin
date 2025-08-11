@@ -202,7 +202,7 @@ except Exception as e:
     
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Python environment test failed. Please check dependencies."
-        Write-Host "Try running: pip install -r requirements.txt" -ForegroundColor Yellow
+        Write-Host "Try running: poetry install && poetry shell" -ForegroundColor Yellow
         exit 1
     }
     
@@ -407,7 +407,7 @@ if ($service.Status -ne 'Running') {
     Write-Host "`nTROUBLESHOoting:" -ForegroundColor Yellow
     Write-Host "1. Run debug-service.bat to test the service manually"
     Write-Host "2. Check the log files listed above for error messages"  
-    Write-Host "3. Ensure all Python dependencies are installed: pip install -r requirements.txt"
+    Write-Host "3. Ensure all Python dependencies are installed: poetry install && poetry shell"
     Write-Host "4. Try running manually: cd $BackendPath && $pythonExe service_wrapper.py"
     Write-Host "5. Use 'nssm edit $ServiceName' to modify service settings"
     Write-Host "6. Check Windows Event Viewer for additional service errors"

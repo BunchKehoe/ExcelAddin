@@ -29,9 +29,9 @@ if (-not (Test-Path $backendPath)) {
 Write-Host "📁 Backend directory: $backendPath" -ForegroundColor White
 Set-Location $backendPath
 
-# Check if requirements.txt exists
-if (-not (Test-Path "requirements.txt")) {
-    Write-Host "❌ requirements.txt not found in backend directory" -ForegroundColor Red
+# Check if pyproject.toml exists
+if (-not (Test-Path "pyproject.toml")) {
+    Write-Host "❌ pyproject.toml not found in backend directory" -ForegroundColor Red
     exit 1
 }
 
@@ -57,8 +57,16 @@ Write-Host "✅ Flask app file found: $appFile" -ForegroundColor Green
 Write-Host ""
 Write-Host "📦 Installing Python dependencies..." -ForegroundColor Yellow
 try {
-    pip install -r requirements.txt --quiet
-    Write-Host "✅ Dependencies installed successfully" -ForegroundColor Green
+    # Check if Poetry is available
+    $poetryCheck = & poetry --version 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        poetry install --no-dev --quiet
+        Write-Host "✅ Dependencies installed successfully with Poetry" -ForegroundColor Green
+    } else {
+        Write-Host "❌ Poetry not found. Please install Poetry first." -ForegroundColor Red
+        Write-Host "   Run: (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -" -ForegroundColor Yellow
+        exit 1
+    }
 } catch {
     Write-Host "⚠️  Warning: Some dependencies might have failed to install" -ForegroundColor Yellow
     Write-Host "    The app might still work if core dependencies are available" -ForegroundColor Yellow
