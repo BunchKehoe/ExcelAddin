@@ -33,31 +33,57 @@ API available at `http://localhost:5000`
 
 ## Configuration
 
-- **Development**: Uses `run.py` with Flask development server
-- **Production**: Uses `service_wrapper.py` with Windows Service via NSSM
-- **Database**: Configure connection details in `database.cfg`
-- **Environment**: Set variables in `.env.production`
+The backend uses **environment-aware configuration** that automatically adapts to different deployment scenarios.
 
-## API Endpoints
+### Environment Detection
 
-- `GET /api/health` - Health check endpoint
-- Additional endpoints defined in `src/presentation/controllers/`
+The application automatically detects its environment based on:
+- `ENVIRONMENT` environment variable (`development`, `staging`, `production`)
+- Hostname patterns (development machines, vs81t for staging, vs84 for production)
+- Other runtime indicators
 
-For complete setup, deployment, and troubleshooting information, see the main project documentation:
-- [Application Guide](../APPLICATION_GUIDE.md)
-- [Deployment Guide](../DEPLOYMENT_GUIDE.md)  
-- [Troubleshooting Guide](../TROUBLESHOOTING_GUIDE.md)
-   ```ini
-   [database]
-   url = mssql+pyodbc://user:pass@server-vs81t.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server
-   ```
+### Database Configuration
 
-3. **Run the application:**
-   ```bash
-   python run.py
-   ```
+The backend uses the `database.cfg` file with environment-specific sections for clean and simple configuration:
 
-   The API will be available at `http://localhost:5000`
+```ini
+# Database Configuration for Excel Add-in Backend
+# Environment-specific database configurations
+# The application automatically detects the environment and uses the appropriate section
+
+[development]
+# For local development - leave empty to use mock data
+# Uncomment and configure if you want to use a real database for local development
+# url = sqlite:///./development.db
+
+[staging] 
+url = mssql+pyodbc://user:pass@server-vs81t.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server
+
+[production]
+url = mssql+pyodbc://user:pass@server-vs84.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server
+```
+
+#### Environment Behavior:
+- **Development**: Uses mock data by default (no database connection required)
+- **Staging**: Uses staging SQL Server database  
+- **Production**: Uses production SQL Server database
+
+#### Local Database Override:
+To use a local database for development, uncomment and configure the URL in the `[development]` section of `database.cfg`.
+
+### Development Features
+
+- **Mock Data Fallback**: Local development automatically uses mock data when no database is configured
+- **Clean Environment Detection**: Automatically detects environment and uses appropriate configuration section
+- **No Hardcoded URLs**: All database URLs are in the configuration file
+
+### Application Settings
+
+Additional settings can be configured via `.env` files:
+- `DEBUG` - Enable debug mode
+- `HOST` / `PORT` - Server binding
+- `CORS_ORIGINS` - Allowed CORS origins  
+- `NIFI_ENDPOINT` - NiFi server URL for data uploads
 
 ## API Endpoints
 

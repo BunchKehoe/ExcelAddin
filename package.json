@@ -6,7 +6,7 @@
   "scripts": {
     "build": "npm run build:functions && webpack --mode production",
     "build:dev": "npm run build:functions && webpack --mode development",
-    "build:prod": "npm run build:functions && webpack --config webpack.prod.config.js --mode production",
+    "build:prod": "npm run build:functions && webpack --config webpack.prod.config.js --mode production --env production",
     "build:staging": "npm run build:functions && webpack --config webpack.prod.config.js --mode production --env staging",
     "build:functions": "custom-functions-metadata generate src/commands/commands.ts src/commands/functions.json",
     "dev": "webpack serve --mode development",
@@ -15,6 +15,7 @@
     "lint": "npx tsc --noEmit",
     "validate": "office-addin-validator manifest.xml",
     "validate:staging": "office-addin-validator manifest-staging.xml",
+    "validate:prod": "office-addin-validator manifest-prod.xml",
     "setup": "./setup.sh",
     "cert:install": "office-addin-dev-certs install",
     "cert:verify": "office-addin-dev-certs verify",
@@ -23,6 +24,7 @@
     "analyze": "webpack --mode production --env analyze && webpack-bundle-analyzer dist/ --port 8888 --no-open",
     "analyze:build": "npm run build && npm run analyze",
     "deploy:prepare": "npm run clean && npm install && npm run build:staging",
+    "deploy:prepare:prod": "npm run clean && npm install && npm run build:prod",
     "deploy:windows": "powershell -ExecutionPolicy Bypass -File deployment/scripts/deploy-windows.ps1",
     "health:check": "powershell -ExecutionPolicy Bypass -File deployment/monitoring/health-check.ps1",
     "test": "echo \"Error: no test specified\" && exit 1"

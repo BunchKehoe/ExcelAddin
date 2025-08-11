@@ -1,6 +1,16 @@
 # PrimeExcelence Excel Add-in
 
-A comprehensive Excel JavaScript add-in built with modern web technologies (TypeScript, React, Material UI) that provides a sophisticated sidebar interface for financial data management, applications, dashboards, and Excel functions.
+A comprehensive Excel JavaScript add-in built with modern web technologies (TypeScript, React, Material UI) that provides a sophisticated sidebar interface for financial data management, applications, dashboards, and custom Excel functions.
+
+## ✨ Features
+
+- **📊 Task Pane Interface** - Modern React-based UI with Material-UI components
+- **🧮 Custom Functions** - Two powerful custom functions available in Excel:
+  - `PC.AGGIRR(expectedFutureValue, originalBeginningValue)` - Calculate aggregate IRR
+  - `PC.JOINCELLS(range, delimiter)` - Join cell ranges with custom delimiters
+- **🔧 Multi-Environment Support** - Configured for local development, staging, and production
+- **🌐 Dynamic Configuration** - Automatically detects environment and configures API endpoints
+- **🚀 Modern Build System** - Webpack-based with TypeScript, hot reloading, and optimized production builds
 
 ## Quick Start
 
@@ -10,27 +20,52 @@ A comprehensive Excel JavaScript add-in built with modern web technologies (Type
 npm install
 cd backend && pip install -r requirements.txt
 
-# 2. Start services
-cd backend && python run.py  # Terminal 1
-npm start                     # Terminal 2
+# 2. Install HTTPS certificates for Office Add-ins
+npm run cert:install
 
-# 3. Load in Excel
+# 3. Start development server
+npm run dev                    # Runs on https://localhost:3000
+
+# 4. Start backend server (if using API features)
+cd backend && python -m flask run --port=5000
+
+# 5. Load in Excel
 # Developer tab → Add-ins → Upload manifest.xml
 ```
 
-### For Windows Server Production
+**Note:** Local development now uses `http://localhost:5000/api` for the backend instead of staging servers, allowing fully local development without network dependencies.
+
+### Testing Custom Functions
+Once loaded in Excel, try these examples:
+```excel
+=PC.AGGIRR(150, 100)           # Returns 1.5
+=PC.JOINCELLS(A1:A5, " | ")    # Joins A1-A5 with " | "
+```
+
+## 🌍 Environment Support
+
+The add-in automatically detects the environment based on the hostname and configures API endpoints dynamically:
+
+| Environment | URL | API Endpoint | Manifest | Build Command |
+|-------------|-----|--------------|----------|---------------|
+| **Local Development** | https://localhost:3000 | http://localhost:5000/api | `manifest.xml` | `npm run build:dev` |
+| **Staging** | https://server-vs81t.intranet.local:9443/excellence/ | https://server-vs81t.intranet.local:9443/excellence/api | `manifest-staging.xml` | `npm run build:staging` |
+| **Production** | https://server-vs84.intranet.local:9443/excellence/ | https://server-vs84.intranet.local:9443/excellence/api | `manifest-prod.xml` | `npm run build:prod` |
+
+### Dynamic Environment Detection
+The application automatically detects its environment based on the browser hostname:
+- **localhost/127.0.0.1** → Development (uses local API server)
+- **server-vs81t.intranet.local** → Staging 
+- **server-vs84.intranet.local** → Production
+- **Unknown hostnames** → Defaults to development with warnings
+
+### For Staging/Production Deployment
 ```powershell
-# 1. Build and deploy files
-npm run build:staging
-# Copy dist/ and backend/ to server
+# Build for specific environment
+npm run build:staging    # or npm run build:prod
 
-# 2. Run setup scripts (as Administrator)
-.\deployment\scripts\setup-backend-service.ps1
-.\deployment\scripts\setup-nginx-service.ps1
-
-# 3. Start services
-Start-Service ExcelAddinBackend
-Start-Service nginx
+# Deploy to IIS (run as Administrator)
+.\deployment\scripts\build-and-deploy-iis.ps1
 ```
 
 ## Documentation

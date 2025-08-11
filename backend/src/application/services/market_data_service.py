@@ -22,13 +22,22 @@ class MarketDataService:
         if repository:
             self._repository = repository
         else:
-            # Try SQL repository first, fall back to mock if connection fails
+            # Try SQL repository first, fall back to mock if connection fails or not available
             try:
-                from ...infrastructure.database.sql_market_data_repository import SqlMarketDataRepository
-                self._repository = SqlMarketDataRepository()
-                # Test the connection
-                self._repository.get_securities()
-                logger.info("Using SQL Server repository for market data")
+                from ...infrastructure.database.db_manager import db_manager
+                
+                # Check if database manager is in mock mode
+                if db_manager.is_mock_mode:
+                    logger.info("Database is in mock mode, using mock repository for market data")
+                    from ...infrastructure.database.mock_repositories import MockMarketDataRepository
+                    self._repository = MockMarketDataRepository()
+                else:
+                    from ...infrastructure.database.sql_market_data_repository import SqlMarketDataRepository
+                    self._repository = SqlMarketDataRepository()
+                    # Test the connection
+                    self._repository.get_securities()
+                    logger.info("Using SQL Server repository for market data")
+                    
             except Exception as e:
                 logger.warning(f"Database connection failed, using mock repository for market data: {e}")
                 from ...infrastructure.database.mock_repositories import MockMarketDataRepository
