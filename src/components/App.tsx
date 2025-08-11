@@ -139,6 +139,16 @@ const App: React.FC = () => {
         <AppBar position="static">
           <Toolbar sx={{ minHeight: 65 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+              <Box
+                component="img"
+                src="/assets/icon-16.svg"
+                alt="Prime Logo"
+                sx={{
+                  height: 24,
+                  width: 24,
+                  mr: 1
+                }}
+              />
               <Typography variant="h6" component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <Box component="span" sx={{ fontWeight: 'bold' }}>
                   Excel

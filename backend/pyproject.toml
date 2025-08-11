@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "prime-excellence-backend"
+version = "0.1.0"
+description = "Backend API for Prime Excellence Excel Add-in"
+authors = ["Your Team <team@example.com>"]
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+Flask = "3.1.1"
+SQLAlchemy = "2.0.42"
+pyodbc = "5.2.0"
+Flask-CORS = "6.0.1"
+python-dotenv = "1.1.1"
+configparser = "7.2.0"
+requests = "2.32.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
