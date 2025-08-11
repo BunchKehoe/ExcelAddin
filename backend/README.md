@@ -33,10 +33,56 @@ API available at `http://localhost:5000`
 
 ## Configuration
 
-- **Development**: Uses `run.py` with Flask development server
-- **Production**: Uses `service_wrapper.py` with Windows Service via NSSM
-- **Database**: Configure connection details in `database.cfg`
-- **Environment**: Set variables in `.env.production`
+The backend uses **environment-aware configuration** that automatically adapts to different deployment scenarios.
+
+### Environment Detection
+
+The application automatically detects its environment based on:
+- `ENVIRONMENT` environment variable (`development`, `staging`, `production`)
+- Hostname patterns (development machines, vs81t for staging, vs84 for production)
+- Other runtime indicators
+
+### Database Configuration
+
+#### **Recommended: Environment Variables**
+Create environment-specific `.env` files:
+
+**Local Development** (`.env` or `.env.development`):
+```env
+ENVIRONMENT=development
+DEBUG=true
+# No database configuration = uses mock data
+# Optional: LOCAL_DATABASE_URL=sqlite:///./local_dev.db
+```
+
+**Staging** (`.env.staging`):
+```env
+ENVIRONMENT=staging
+STAGING_DATABASE_URL=mssql+pyodbc://user:pass@server-vs81t.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server
+```
+
+**Production** (`.env.production`):
+```env
+ENVIRONMENT=production
+PRODUCTION_DATABASE_URL=mssql+pyodbc://user:pass@server-vs84.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server
+```
+
+#### **Legacy: Configuration Files**
+The `database.cfg` file is maintained for backwards compatibility but is superseded by environment variables.
+
+### Development Features
+
+- **Mock Data Fallback**: Local development automatically uses mock data when no database is configured
+- **Flexible Database**: Can optionally connect to local/test databases via `LOCAL_DATABASE_URL`
+- **Environment Isolation**: No hardcoded staging/production URLs that break local development
+
+### Application Settings
+
+Additional settings can be configured via `.env` files:
+- `DEBUG` - Enable debug mode
+- `HOST` / `PORT` - Server binding
+- `CORS_ORIGINS` - Allowed CORS origins  
+- `NIFI_ENDPOINT` - NiFi server URL for data uploads
 
 ## API Endpoints
 
