@@ -12,7 +12,7 @@ def detect_backend_environment() -> str:
     Detect the current backend environment based on various indicators.
     Returns 'development', 'staging', or 'production'.
     """
-    # Check environment variable first
+    # Check environment variable first (most explicit)
     env = os.getenv('ENVIRONMENT', '').lower()
     if env in ['development', 'dev', 'local']:
         return 'development'
@@ -21,28 +21,22 @@ def detect_backend_environment() -> str:
     elif env in ['production', 'prod', 'live']:
         return 'production'
     
-    # Check hostname patterns
+    # Check hostname patterns as fallback
     try:
         hostname = socket.gethostname().lower()
-        if any(pattern in hostname for pattern in ['dev', 'local', 'desktop', 'laptop']):
-            return 'development'
-        elif 'vs81t' in hostname or 'staging' in hostname:
+        if 'vs81t' in hostname or 'staging' in hostname:
             return 'staging'
         elif 'vs84' in hostname or 'prod' in hostname:
             return 'production'
     except:
         pass
     
-    # Check if we're running on localhost/development server
-    if os.getenv('FLASK_ENV') == 'development' or os.getenv('DEBUG', '').lower() == 'true':
-        return 'development'
-    
     # Default to development for safety (uses mock data)
     return 'development'
 
 
 class DatabaseConfig:
-    """Database configuration management with environment-aware settings."""
+    """Database configuration management with environment-specific settings."""
     
     def __init__(self, config_file: str = "database.cfg"):
         self.config_file = config_file
@@ -51,65 +45,41 @@ class DatabaseConfig:
         self._load_config()
     
     def _load_config(self):
-        """Load configuration from file with environment-specific fallbacks."""
+        """Load configuration from file."""
         self._config = configparser.ConfigParser()
         
         # Go up to the backend directory from src/infrastructure/config/
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         config_path = os.path.join(backend_dir, self.config_file)
         
-        # Try to load the config file, but don't fail if it doesn't exist in development
         if os.path.exists(config_path):
             self._config.read(config_path)
         elif self.environment != 'development':
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
-    def _get_environment_database_url(self) -> str:
-        """Get database URL based on current environment."""
-        if self.environment == 'development':
-            # For local development, check if a local database is configured
-            local_db_url = os.getenv('LOCAL_DATABASE_URL')
-            if local_db_url:
-                return local_db_url
-            
-            # If no local database, return None to trigger mock repository usage
-            return None
-            
-        elif self.environment == 'staging':
-            return os.getenv(
-                'STAGING_DATABASE_URL',
-                'mssql+pyodbc://user:pass@server-vs81t.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server'
-            )
-            
-        elif self.environment == 'production':
-            return os.getenv(
-                'PRODUCTION_DATABASE_URL',
-                'mssql+pyodbc://user:pass@server-vs84.intranet.local/test?driver=ODBC+Driver+17+for+SQL+Server'
-            )
-        
-        return None
-    
     @property
     def database_url(self) -> Optional[str]:
         """Get database connection URL based on environment."""
-        # First, try environment-specific URL
-        env_url = self._get_environment_database_url()
-        if env_url is not None:  # Explicitly check for None to allow empty strings
-            return env_url
-        
-        # Fallback to config file if available (for backwards compatibility)
-        if self._config and self._config.has_section('database'):
-            legacy_url = self._config.get('database', 'url')
-            # If we're in development and get a staging URL from config, ignore it
-            if self.environment == 'development' and 'server-vs81t' in legacy_url:
+        if not self._config:
+            # No config file available - return None for development (triggers mock data)
+            if self.environment == 'development':
                 return None
-            return legacy_url
+            else:
+                raise ValueError(f"No database configuration file found for {self.environment} environment")
         
-        # Return None for development environment to trigger mock usage
+        # Check if environment-specific section exists
+        if self._config.has_section(self.environment):
+            if self._config.has_option(self.environment, 'url'):
+                return self._config.get(self.environment, 'url')
+            else:
+                # Section exists but no URL (e.g., development with no database)
+                return None
+        
+        # For development, return None to trigger mock data usage
         if self.environment == 'development':
             return None
             
-        raise ValueError(f"No database configuration found for {self.environment} environment")
+        raise ValueError(f"No database configuration found for '{self.environment}' environment in {self.config_file}")
 
 
 class AppConfig:
