@@ -33,6 +33,7 @@ The add-in consists of two main components:
 - **Database Integration**: Connects to various data sources for financial information
 - **Authentication**: Handles user authentication and session management
 - **Business Logic**: Implements financial calculations and data processing
+- **Poetry-based Dependency Management**: Uses Poetry for reliable dependency and environment management
 
 ## Technology Stack
 
@@ -46,6 +47,7 @@ The add-in consists of two main components:
 ### Backend
 - **Python 3.x**: Runtime environment
 - **Flask**: Lightweight web framework for REST API
+- **Poetry**: Modern dependency management and packaging tool
 - **Configuration**: Environment-based configuration for different deployments
 
 ### Build & Development Tools
@@ -98,6 +100,7 @@ ExcelAddin/
 ### Prerequisites
 - **Node.js** (v16 or higher)
 - **Python** (3.8 or higher)
+- **Poetry** (for Python dependency management)
 - **Microsoft Excel** (Office 365, Excel 2016+)
 - **PowerShell** (for Windows deployment scripts)
 
@@ -109,13 +112,14 @@ ExcelAddin/
    cd ExcelAddin
    npm install
    cd backend
-   pip install -r requirements.txt
+   poetry install
    ```
 
 2. **Start services**:
    ```bash
    # Terminal 1 - Backend
    cd backend
+   poetry shell
    python run.py
    
    # Terminal 2 - Frontend  

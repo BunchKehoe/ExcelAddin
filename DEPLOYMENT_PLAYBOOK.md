@@ -33,6 +33,8 @@ All environments support:
 
 ### Prerequisites
 - Node.js 16+ installed
+- Python 3.8+ installed
+- Poetry installed (`curl -sSL https://install.python-poetry.org | python3 -`)
 - Git
 - Office Add-in SSL certificates (required for local development)
 
@@ -93,6 +95,7 @@ The development server will automatically use the SSL certificates from `~/.offi
 ```bash
 # In a separate terminal, start the backend server  
 cd backend
+poetry shell
 python -m flask run --port=5000
 ```
 

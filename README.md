@@ -14,11 +14,19 @@ A comprehensive Excel JavaScript add-in built with modern web technologies (Type
 
 ## Quick Start
 
+**Prerequisites**: Ensure you have Poetry installed for backend dependency management:
+```bash
+# Install Poetry (if not already installed)
+curl -sSL https://install.python-poetry.org | python3 -
+# or on Windows:
+(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+```
+
 ### For Local Development
 ```bash
 # 1. Install dependencies
 npm install
-cd backend && pip install -r requirements.txt
+cd backend && poetry install && poetry shell
 
 # 2. Install HTTPS certificates for Office Add-ins
 npm run cert:install
@@ -27,7 +35,7 @@ npm run cert:install
 npm run dev                    # Runs on https://localhost:3000
 
 # 4. Start backend server (if using API features)
-cd backend && python -m flask run --port=5000
+cd backend && poetry shell && python -m flask run --port=5000
 
 # 5. Load in Excel
 # Developer tab → Add-ins → Upload manifest.xml
@@ -96,6 +104,7 @@ This project includes comprehensive documentation organized into three main guid
 
 ### Backend
 - **Python 3.x + Flask**: REST API service
+- **Poetry**: Dependency management and virtual environment
 - **Windows Service**: Runs as Windows service via NSSM
 - **Configuration**: Environment-based configuration
 

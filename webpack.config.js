@@ -53,7 +53,12 @@ module.exports = {
     }),
     new CopyWebpackPlugin({
       patterns: [
-        { from: './src/commands/functions.json', to: 'functions.json' }
+        { from: './src/commands/functions.json', to: 'functions.json' },
+        {
+          from: './assets',
+          to: 'assets',
+          noErrorOnMissing: true
+        }
       ]
     })
   ],

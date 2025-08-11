@@ -64,8 +64,20 @@ To apply these upgrades:
 
 ```bash
 cd backend
-pip install -r requirements.txt --upgrade
+poetry install
 ```
+
+## Migration to Poetry
+
+The project has migrated from pip-based dependency management to Poetry:
+
+- **Before**: Dependencies managed via `requirements.txt`
+- **After**: Dependencies managed via `pyproject.toml` with Poetry
+- **Benefits**:
+  - Locked dependency versions for reproducible builds
+  - Better dependency resolution
+  - Virtual environment management built-in
+  - Clear separation of runtime and development dependencies
 
 ## Risk Assessment
 

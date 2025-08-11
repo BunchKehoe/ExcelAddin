@@ -117,7 +117,7 @@ try {
     
     if (Test-Path $webConfigSource) {
         Copy-Item $webConfigSource $webConfigDest -Force
-        Write-Host "   ✓ Updated web.config to latest version" -ForegroundColor Green
+        Write-Host "   [OK] Updated web.config to latest version" -ForegroundColor Green
     } else {
         Write-Warning "   web.config not found at: $webConfigSource"
     }
@@ -127,9 +127,9 @@ try {
     foreach ($file in $keyFiles) {
         $filePath = Join-Path $ExcellenceDir $file
         if (Test-Path $filePath) {
-            Write-Host "   ✓ $file deployed successfully" -ForegroundColor Green
+            Write-Host "   [OK] $file deployed successfully" -ForegroundColor Green
         } else {
-            Write-Warning "   ⚠ $file not found in deployment"
+            Write-Warning "   [WARNING] $file not found in deployment"
         }
     }
 

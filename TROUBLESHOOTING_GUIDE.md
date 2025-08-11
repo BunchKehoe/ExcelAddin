@@ -62,7 +62,7 @@ nssm dump ExcelAddinBackend
 - **Missing dependencies**: Python packages not installed
   ```powershell
   cd C:\inetpub\wwwroot\ExcelAddin\backend
-  pip install -r requirements.txt
+  poetry install
   ```
 - **Wrong working directory**: Service can't find required files
   ```powershell
@@ -127,9 +127,11 @@ npm run build:staging
 ```powershell
 # Test Python environment manually
 cd C:\inetpub\wwwroot\ExcelAddin\backend
+poetry shell
 python service_wrapper.py
 
 # Test Flask app directly
+poetry shell
 python run.py
 
 # Test API endpoint
@@ -161,7 +163,8 @@ nssm set ExcelAddinBackend AppDirectory "C:\inetpub\wwwroot\ExcelAddin\backend"
 Test-Path "C:\inetpub\wwwroot\ExcelAddin\backend\service_wrapper.py"
 
 # 4. Test manual startup
-cd C:\inetpub\wwwroot\ExcelAddin\backend  
+cd C:\inetpub\wwwroot\ExcelAddin\backend
+poetry shell  
 python service_wrapper.py
 ```
 
@@ -273,6 +276,17 @@ Get-Content C:\nginx\logs\error.log -Wait -Tail 10
 
 ### Python Environment Issues
 
+#### 0. Poetry Setup Issues
+```powershell
+# Install Poetry if not installed
+(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+
+# Verify Poetry installation
+poetry --version
+
+# If Poetry is not in PATH, add it manually or restart terminal
+```
+
 #### 1. Python Path Problems
 ```powershell
 # Find Python executable
@@ -288,12 +302,13 @@ nssm set ExcelAddinBackend Application $pythonPath
 ```powershell
 # Verify all packages installed
 cd C:\inetpub\wwwroot\ExcelAddin\backend
-pip list
+poetry show
 
-# Reinstall requirements
-pip install -r requirements.txt --force-reinstall
+# Reinstall dependencies
+poetry install --no-dev
 
-# Check for import errors
+# Check for import errors in Poetry shell
+poetry shell
 python -c "import flask; print('Flask OK')"
 ```
 
