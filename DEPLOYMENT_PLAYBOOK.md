@@ -26,23 +26,58 @@ All environments support:
 ### Prerequisites
 - Node.js 16+ installed
 - Git
-- SSL certificates for localhost (auto-generated)
+- Office Add-in SSL certificates (required for local development)
 
 ### Setup & Run
+
+#### Step 1: Clone and Install Dependencies
 ```bash
 # 1. Clone and install
 git clone <repository>
 cd ExcelAddin
 npm install
+```
 
-# 2. Generate SSL certificates (one-time)
+#### Step 2: Generate Office Add-in SSL Certificates
+Office Add-ins require HTTPS connections, even for local development. Generate the required SSL certificates:
+
+```bash
+# Install certificates (creates ~/.office-addin-dev-certs/ directory)
 npm run cert:install
 
-# 3. Start development server
+# Verify certificates are properly installed
+npm run cert:verify
+```
+
+**Certificate Details:**
+- **Location:** `~/.office-addin-dev-certs/`
+- **Files Created:**
+  - `localhost.crt` - SSL certificate for localhost
+  - `localhost.key` - Private key for the certificate
+- **Validity:** These certificates are trusted by your system for Office Add-in development
+
+**Troubleshooting Certificate Issues:**
+If you encounter certificate problems:
+```bash
+# Uninstall existing certificates
+npm run cert:uninstall
+
+# Reinstall fresh certificates
+npm run cert:install
+
+# Verify installation
+npm run cert:verify
+```
+
+#### Step 3: Start Development Server
+```bash
+# Start development server with HTTPS
 npm run dev
 # or
 npm start
 ```
+
+The development server will automatically use the SSL certificates from `~/.office-addin-dev-certs/` for secure HTTPS connections required by Office Add-ins.
 
 ### Development URLs
 - **Frontend:** https://localhost:3000
@@ -73,7 +108,9 @@ npm start
 - Access to staging server: `server-vs81t.intranet.local`
 - IIS with SSL configured on port 9443
 - PowerShell execution privileges
-- SSL certificates in `C:\Cert\server-vs81t.(crt|key)`
+- SSL certificates properly configured on staging server
+
+**Important:** Staging builds use the production webpack configuration (`webpack.prod.config.js`) which does not require Office Add-in development certificates. The staging server handles SSL through IIS configuration.
 
 ### Build & Deploy
 ```bash
@@ -277,6 +314,52 @@ npm run clean                  # Clean build artifacts
 npm run lint                   # TypeScript validation
 npm run analyze                # Bundle analysis
 ```
+
+---
+
+## 🔧 Certificate & HTTPS Troubleshooting
+
+### Common Certificate Issues
+
+#### Issue: "Office Add-in certificates not found" warning
+**Solution:**
+```bash
+npm run cert:install
+npm run cert:verify
+```
+
+#### Issue: "Failed to load webpack.config.js - ENOENT: localhost.key"
+This indicates the development configuration is trying to use certificates that don't exist.
+**Solution:**
+1. Install Office Add-in certificates: `npm run cert:install`
+2. Or use the fallback HTTPS configuration (automatic in updated webpack config)
+
+#### Issue: Excel doesn't trust the development server
+**Symptoms:** 
+- Excel shows security warnings
+- Add-in won't load from localhost
+- "This add-in is not secure" messages
+
+**Solution:**
+```bash
+# Uninstall and reinstall certificates
+npm run cert:uninstall
+npm run cert:install
+
+# Verify certificates are trusted
+npm run cert:verify
+```
+
+#### Issue: Different certificate requirements per environment
+**Understanding:**
+- **Local Development:** Uses Office Add-in development certificates in `~/.office-addin-dev-certs/`
+- **Staging/Production:** Uses server-managed SSL certificates through IIS
+- **Webpack configs:** Development vs production configs handle certificates differently
+
+**Configuration:**
+- Development webpack config auto-detects and uses Office Add-in certificates
+- Production/staging webpack configs rely on server SSL configuration
+- No cross-configuration conflicts
 
 ---
 

@@ -1,4 +1,5 @@
 const path = require('path');
+const { readFileSync, existsSync } = require('fs');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
@@ -61,7 +62,25 @@ module.exports = {
     port: 3000,
     open: false,
     hot: true,
-    server: 'https',
+    server: (() => {
+      const certPath = require('os').homedir() + '/.office-addin-dev-certs/localhost.crt';
+      const keyPath = require('os').homedir() + '/.office-addin-dev-certs/localhost.key';
+      
+      // Check if Office Add-in certificates exist
+      if (existsSync(certPath) && existsSync(keyPath)) {
+        return {
+          type: 'https',
+          options: {
+            key: readFileSync(keyPath),
+            cert: readFileSync(certPath)
+          }
+        };
+      } else {
+        console.warn('⚠️  Office Add-in certificates not found. Run "npm run cert:install" to install certificates for proper HTTPS support.');
+        console.warn('📍 Using default HTTPS configuration as fallback.');
+        return 'https';
+      }
+    })(),
     allowedHosts: 'all',
     headers: {
       'Access-Control-Allow-Origin': '*',
