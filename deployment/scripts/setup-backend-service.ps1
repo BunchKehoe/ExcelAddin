@@ -89,7 +89,7 @@ function Find-PythonExecutable {
         try {
             $version = & "$path" --version 2>&1
             if ($LASTEXITCODE -eq 0 -and $version -match "Python \d+\.\d+") {
-                Write-Host "✓ Found Python: $path ($version)" -ForegroundColor Green
+                Write-Host "[OK] Found Python: $path ($version)" -ForegroundColor Green
                 return $path
             }
         } catch {
@@ -115,7 +115,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "NSSM not found"
     }
-    Write-Host "✓ NSSM found: $nssmVersion" -ForegroundColor Green
+    Write-Host "[OK] NSSM found: $nssmVersion" -ForegroundColor Green
 } catch {
     Write-Error "NSSM (Non-Sucking Service Manager) is required but not found."
     Write-Host "Please download and install NSSM from: https://nssm.cc/" -ForegroundColor Yellow
@@ -139,7 +139,7 @@ if ($Uninstall) {
         
         & nssm remove $ServiceName confirm
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "✓ Backend service removed successfully" -ForegroundColor Green
+            Write-Host "[OK] Backend service removed successfully" -ForegroundColor Green
         } else {
             Write-Error "Failed to remove backend service"
         }
@@ -170,7 +170,7 @@ if ($existingService) {
 $logDir = "C:\Logs\ExcelAddin"
 if (-not (Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    Write-Host "✓ Created log directory: $logDir" -ForegroundColor Green
+    Write-Host "[OK] Created log directory: $logDir" -ForegroundColor Green
 }
 
 # Test Python dependencies
@@ -206,7 +206,7 @@ except Exception as e:
         exit 1
     }
     
-    Write-Host "✓ Python environment test passed" -ForegroundColor Green
+    Write-Host "[OK] Python environment test passed" -ForegroundColor Green
     
 } catch {
     Write-Error "Error testing Python environment: $_"
@@ -273,7 +273,7 @@ $envVars = @(
 & nssm set $ServiceName AppStopMethodWindow 15000
 & nssm set $ServiceName AppStopMethodThreads 15000
 
-Write-Host "✓ Backend service configured successfully" -ForegroundColor Green
+Write-Host "[OK] Backend service configured successfully" -ForegroundColor Green
 
 # Create debugging batch file
 Write-Host "Creating debugging tools..." -ForegroundColor Yellow
@@ -332,7 +332,7 @@ pause
 
 $serviceMgmtBat | Set-Content -Path "$BackendPath\manage-service.bat" -Encoding ASCII
 
-Write-Host "✓ Debug tools created in $BackendPath" -ForegroundColor Green
+Write-Host "[OK] Debug tools created in $BackendPath" -ForegroundColor Green
 
 # Start the service
 Write-Host "Starting backend service..." -ForegroundColor Yellow
@@ -344,7 +344,7 @@ $service = Get-Service -Name $ServiceName
 Write-Host "Service status: $($service.Status)" -ForegroundColor $(if ($service.Status -eq 'Running') { 'Green' } else { 'Red' })
 
 if ($service.Status -eq 'Running') {
-    Write-Host "✓ Backend service is running successfully" -ForegroundColor Green
+    Write-Host "[OK] Backend service is running successfully" -ForegroundColor Green
     
     # Test if Flask is responding
     Write-Host "Testing Flask backend response..." -ForegroundColor Yellow
@@ -352,7 +352,7 @@ if ($service.Status -eq 'Running') {
     try {
         $response = Invoke-WebRequest -Uri "http://127.0.0.1:5000/health" -TimeoutSec 10 -ErrorAction SilentlyContinue
         if ($response.StatusCode -eq 200) {
-            Write-Host "✓ Flask backend is responding on port 5000" -ForegroundColor Green
+            Write-Host "[OK] Flask backend is responding on port 5000" -ForegroundColor Green
         } else {
             Write-Warning "Flask backend returned status: $($response.StatusCode)"
         }

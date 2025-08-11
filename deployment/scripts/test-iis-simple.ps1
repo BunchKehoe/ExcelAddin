@@ -179,7 +179,7 @@ Write-Host "`n" + "="*50 -ForegroundColor Yellow
 Write-Host "Test Results: $testsPassed/$totalTests tests passed" -ForegroundColor $(if ($testsPassed -eq $totalTests) { "Green" } else { "Red" })
 
 if ($testsPassed -eq $totalTests) {
-    Write-Host "`n✓ IIS setup appears to be working correctly!" -ForegroundColor Green -BackgroundColor DarkGreen
+    Write-Host "`n[OK] IIS setup appears to be working correctly!" -ForegroundColor Green -BackgroundColor DarkGreen
     Write-Host "URLs to test:" -ForegroundColor Cyan
     Write-Host "  Main site: https://$ServerName`:$Port/excellence/" -ForegroundColor White
     Write-Host "  Health check: https://$ServerName`:$Port/health" -ForegroundColor White
