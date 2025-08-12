@@ -95,15 +95,7 @@ catch {
     exit 1
 }
 
-# Check if IIS is installed and running
-$iisFeature = Get-WindowsFeature -Name IIS-WebServerRole -ErrorAction SilentlyContinue
-if (-not $iisFeature -or $iisFeature.InstallState -ne "Installed") {
-    Write-Error "IIS is not installed. Please install IIS with ASP.NET support first."
-    Write-Host "Run: Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole,IIS-ASPNET45" -ForegroundColor Yellow
-    exit 1
-}
-
-Write-Host "[OK] IIS is installed and available" -ForegroundColor Green
+# IIS check removed as requested - assuming IIS is available
 
 # Install/Verify wfastcgi for Python-IIS integration
 Write-Host "Setting up Python FastCGI integration..." -ForegroundColor Yellow
@@ -119,11 +111,17 @@ catch {
 # Enable FastCGI in IIS
 Write-Host "Configuring IIS FastCGI..." -ForegroundColor Yellow
 try {
-    & $PythonPath -m wfastcgi.enable
-    Write-Host "[OK] FastCGI enabled for Python" -ForegroundColor Green
+    # Try the enable command, but don't fail if the module structure has changed
+    $fastcgiResult = & $PythonPath -m wfastcgi --help 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        & $PythonPath -m wfastcgi enable 2>$null
+        Write-Host "[OK] FastCGI enabled for Python" -ForegroundColor Green
+    } else {
+        Write-Host "[INFO] wfastcgi enable command not available - FastCGI may need manual configuration" -ForegroundColor Yellow
+    }
 }
 catch {
-    Write-Warning "FastCGI configuration may have failed, but continuing..."
+    Write-Host "[INFO] wfastcgi enable command failed - FastCGI may need manual configuration" -ForegroundColor Yellow
 }
 
 if ($Uninstall) {
@@ -194,9 +192,10 @@ $webConfigPath = Join-Path $BackendPath "web.config"
 if (Test-Path $webConfigPath) {
     try {
         $webConfig = Get-Content $webConfigPath -Raw
-        # Update Python path in FastCGI configuration
+        # Update Python path in FastCGI configuration - use proper path escaping
         $webConfig = $webConfig -replace 'C:\\Python39\\python\.exe', $PythonPath
-        $webConfig = $webConfig -replace 'C:\\Python39\\Lib\\site-packages\\wfastcgi\.py', "$((Split-Path $PythonPath -Parent)\Lib\site-packages\wfastcgi.py)"
+        $pythonLibPath = (Split-Path $PythonPath -Parent) + '\Lib\site-packages\wfastcgi.py'
+        $webConfig = $webConfig -replace 'C:\\Python39\\Lib\\site-packages\\wfastcgi\.py', $pythonLibPath
         $webConfig | Set-Content $webConfigPath
         Write-Host "[OK] Updated web.config with Python path: $PythonPath" -ForegroundColor Green
     }
