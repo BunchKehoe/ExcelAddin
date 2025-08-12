@@ -97,7 +97,7 @@ function Get-BackendPath {
 
 function Get-FrontendPath {
     $projectRoot = Get-ProjectRoot
-    return Get-ProjectRoot
+    return $projectRoot  # Frontend is at project root level
 }
 
 function Test-Prerequisites {

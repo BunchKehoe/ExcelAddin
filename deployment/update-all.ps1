@@ -7,7 +7,7 @@ param(
 )
 
 # Import common functions
-. "$PSScriptRoot\scripts\common.ps1"
+. (Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "common.ps1")
 
 Write-Header "ExcelAddin Update Deployment"
 

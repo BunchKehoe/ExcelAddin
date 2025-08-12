@@ -7,7 +7,7 @@ param(
 )
 
 # Import common functions
-. "$PSScriptRoot\scripts\common.ps1"
+. (Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "common.ps1")
 
 $SiteName = "ExcelAddin"
 $Port = 9443
@@ -21,7 +21,7 @@ Write-Host "- IIS Reverse Proxy (HTTPS on port $Port)"
 Write-Host ""
 
 # Check prerequisites
-if (-not (Test-Prerequisites)) {
+if (-not (Test-Prerequisites -SkipPM2 -SkipNSSM:$false)) {
     Write-Error "Prerequisites check failed. Please resolve issues before continuing."
     exit 1
 }
@@ -29,7 +29,7 @@ if (-not (Test-Prerequisites)) {
 # Clean up any existing PM2 configurations
 Write-Header "Step 0: Clean up PM2 (if present)"
 
-$cleanupScript = "$PSScriptRoot\scripts\cleanup-pm2.ps1"
+$cleanupScript = Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "cleanup-pm2.ps1"
 if (Test-Path $cleanupScript) {
     try {
         & $cleanupScript -Force
@@ -93,15 +93,15 @@ try {
         }
         
         # Create application directory
-        $appPath = "C:\inetpub\wwwroot\$SiteName"
+        $appPath = Join-Path "C:\inetpub\wwwroot" $SiteName
         if (-not (Test-Path $appPath)) {
             New-Item -ItemType Directory -Path $appPath -Force | Out-Null
             Write-Host "Created application directory: $appPath"
         }
         
         # Copy web.config
-        $webConfigSource = "$PSScriptRoot\config\web.config"
-        $webConfigDest = "$appPath\web.config"
+        $webConfigSource = Join-Path $PSScriptRoot "config" | Join-Path -ChildPath "web.config"
+        $webConfigDest = Join-Path $appPath "web.config"
         Copy-Item $webConfigSource $webConfigDest -Force
         Write-Host "Copied web.config to application directory"
         

@@ -9,17 +9,17 @@ param(
 )
 
 # Import common functions
-. "$PSScriptRoot\scripts\common.ps1"
+. (Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "common.ps1")
 
 $ServiceName = "ExcelAddin-Frontend"
 $ServiceDisplayName = "ExcelAddin Frontend Service"
 $ServiceDescription = "Excel Add-in Frontend Web Server"
-$FrontendServerScript = "$PSScriptRoot/config/frontend-server.js"
+$FrontendServerScript = Join-Path $PSScriptRoot "config" | Join-Path -ChildPath "frontend-server.js"
 
 Write-Header "ExcelAddin Frontend Deployment"
 
 # Check prerequisites
-if (-not (Test-Prerequisites -SkipPM2)) {
+if (-not (Test-Prerequisites -SkipPM2 -SkipNSSM:$false)) {
     Write-Error "Prerequisites check failed. Please resolve issues before continuing."
     exit 1
 }
@@ -220,15 +220,15 @@ try {
             }
             
             # Create application directory
-            $appPath = "C:\inetpub\wwwroot\$SiteName"
+            $appPath = Join-Path "C:\inetpub\wwwroot" $SiteName
             if (-not (Test-Path $appPath)) {
                 New-Item -ItemType Directory -Path $appPath -Force | Out-Null
                 Write-Host "Created application directory: $appPath"
             }
             
             # Copy web.config
-            $webConfigSource = "$PSScriptRoot\config\web.config"
-            $webConfigDest = "$appPath\web.config"
+            $webConfigSource = Join-Path $PSScriptRoot "config" | Join-Path -ChildPath "web.config"
+            $webConfigDest = Join-Path $appPath "web.config"
             if (Test-Path $webConfigSource) {
                 Copy-Item $webConfigSource $webConfigDest -Force
                 Write-Host "Copied web.config to application directory"

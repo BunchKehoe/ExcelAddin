@@ -7,7 +7,7 @@ param(
 )
 
 # Import common functions
-. "$PSScriptRoot\scripts\common.ps1"
+. (Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "common.ps1")
 
 $ServiceName = "ExcelAddin-Backend"
 $ServiceDisplayName = "ExcelAddin Backend Service"
@@ -16,7 +16,7 @@ $ServiceDescription = "Excel Add-in Backend API Service"
 Write-Header "ExcelAddin Backend Deployment"
 
 # Check prerequisites
-if (-not (Test-Prerequisites -SkipPM2)) {
+if (-not (Test-Prerequisites -SkipPM2 -SkipNSSM:$false)) {
     Write-Error "Prerequisites check failed. Please resolve issues before continuing."
     exit 1
 }
