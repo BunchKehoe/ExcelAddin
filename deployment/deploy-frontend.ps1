@@ -505,7 +505,7 @@ try {
                         }
                         
                         # Use netsh for certificate binding to the specific port
-                        $bindCommand = "netsh http add sslcert ipport=0.0.0.0:$Port certhash=$CertificateThumbprint appid={12345678-1234-1234-1234-123456789abc} certstorename=MY"
+                        $bindCommand = "netsh http add sslcert ipport=0.0.0.0:$Port certhash=$CertificateThumbprint appid='{12345678-1234-1234-1234-123456789abc}' certstorename=MY"
                         Write-Host "Executing: $bindCommand"
                         
                         # First, try to remove any existing binding
