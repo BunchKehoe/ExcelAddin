@@ -41,7 +41,7 @@ cd backend && poetry shell && python -m flask run --port=5000
 # Developer tab → Add-ins → Upload manifest.xml
 ```
 
-**Note:** Local development now uses `http://localhost:5000/api` for the backend instead of staging servers, allowing fully local development without network dependencies.
+**Note:** Local development still uses `http://localhost:5000/api` for the backend, but staging and production use the new IIS routing architecture, eliminating the need for separate backend services.
 
 ### Testing Custom Functions
 Once loaded in Excel, try these examples:
@@ -62,7 +62,7 @@ The add-in automatically detects the environment based on the hostname and confi
 
 ### Dynamic Environment Detection
 The application automatically detects its environment based on the browser hostname:
-- **localhost/127.0.0.1** → Development (uses local API server)
+- **localhost/127.0.0.1** → Development (uses localhost:5000 backend for local development)
 - **server-vs81t.intranet.local** → Staging 
 - **server-vs84.intranet.local** → Production
 - **Unknown hostnames** → Defaults to development with warnings

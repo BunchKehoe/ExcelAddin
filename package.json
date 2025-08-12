@@ -10,6 +10,7 @@
     "build:staging": "npm run build:functions && webpack --config webpack.prod.config.js --mode production --env staging",
     "build:functions": "custom-functions-metadata generate src/commands/commands.ts src/commands/functions.json",
     "dev": "webpack serve --mode development",
+    "dev:backend": "cd backend && python run.py",
     "start": "webpack serve --mode development",
     "clean": "rm -rf dist node_modules/.cache",
     "lint": "npx tsc --noEmit",

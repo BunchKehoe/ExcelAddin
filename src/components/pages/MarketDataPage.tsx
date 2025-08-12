@@ -68,7 +68,7 @@ const MarketDataPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading securities:', error);
-      setError('Failed to connect to backend. Make sure the Flask server is running on localhost:5000');
+      setError('Failed to connect to backend. For local development, run "python backend/run.py" to start the backend server.');
       // Fallback to mock data
       setSecurities(['AAPL US Equity', 'MSFT US Equity', 'GOOGL US Equity']);
     }

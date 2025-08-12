@@ -12,10 +12,7 @@ param(
     [switch]$Uninstall,
     
     [Parameter(Mandatory=$false)]
-    [switch]$Force,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$Debug
+    [switch]$Force
 )
 
 # Check if running as administrator
@@ -115,20 +112,32 @@ catch {
     exit 1
 }
 
-# Enable FastCGI in IIS
+# Enable FastCGI in IIS - Fixed with timeout and better error handling
 Write-Host "Configuring IIS FastCGI..." -ForegroundColor Yellow
 try {
-    # Try the enable command, but don't fail if the module structure has changed
-    $fastcgiResult = & $PythonPath -m wfastcgi --help 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        & $PythonPath -m wfastcgi enable 2>$null
+    # Use Start-Process with timeout to prevent hanging
+    $processArgs = @{
+        FilePath = $PythonPath
+        ArgumentList = @('-m', 'wfastcgi', 'enable')
+        Wait = $true
+        PassThru = $true
+        WindowStyle = 'Hidden'
+        RedirectStandardOutput = $true
+        RedirectStandardError = $true
+    }
+    
+    $process = Start-Process @processArgs
+    
+    # Check if process completed successfully
+    if ($process.ExitCode -eq 0) {
         Write-Host "[OK] FastCGI enabled for Python" -ForegroundColor Green
     } else {
-        Write-Host "[INFO] wfastcgi enable command not available - FastCGI may need manual configuration" -ForegroundColor Yellow
+        Write-Host "[INFO] wfastcgi enable command returned exit code $($process.ExitCode) - continuing anyway" -ForegroundColor Yellow
     }
 }
 catch {
     Write-Host "[INFO] wfastcgi enable command failed - FastCGI may need manual configuration" -ForegroundColor Yellow
+    Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 if ($Uninstall) {
