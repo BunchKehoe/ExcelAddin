@@ -236,9 +236,120 @@ try {
                 Write-Warning "web.config not found at $webConfigSource"
             }
             
-            # Create IIS site
-            Write-Host "Creating IIS site: $SiteName"
-            New-IISSite -Name $SiteName -PhysicalPath $appPath -BindingInformation "*:$Port" -Protocol https
+            # Find SSL certificate for the domain
+            Write-Host "Looking for SSL certificate for server-vs81t.intranet.local..."
+            $CertificatePath = "C:\Cert"
+            $CertificateThumbprint = ""
+            
+            # First, try to import certificate from C:\Cert\ if it exists
+            if (Test-Path $CertificatePath) {
+                Write-Host "Checking certificate directory: $CertificatePath"
+                $certFiles = Get-ChildItem -Path $CertificatePath -Filter "*.pfx" -ErrorAction SilentlyContinue
+                if (-not $certFiles) {
+                    $certFiles = Get-ChildItem -Path $CertificatePath -Filter "*.p12" -ErrorAction SilentlyContinue
+                }
+                
+                if ($certFiles) {
+                    $certFile = $certFiles | Select-Object -First 1
+                    Write-Host "Found certificate file: $($certFile.Name)"
+                    try {
+                        # Import certificate to local machine store
+                        $importResult = Import-PfxCertificate -FilePath $certFile.FullName -CertStoreLocation "Cert:\LocalMachine\My" -Password (ConvertTo-SecureString -String "" -AsPlainText -Force) -ErrorAction SilentlyContinue
+                        if ($importResult) {
+                            $CertificateThumbprint = $importResult.Thumbprint
+                            Write-Success "Imported SSL certificate: $($importResult.Subject) (Thumbprint: $CertificateThumbprint)"
+                        } else {
+                            Write-Warning "Failed to import certificate from $($certFile.FullName)"
+                        }
+                    } catch {
+                        Write-Warning "Could not import certificate from $($certFile.FullName): $($_.Exception.Message)"
+                    }
+                }
+            }
+            
+            # If no certificate imported from file, try to find existing certificate in store
+            if (-not $CertificateThumbprint) {
+                Write-Host "Searching certificate store for server-vs81t.intranet.local..."
+                $certificates = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { 
+                    $_.Subject -like "*server-vs81t.intranet.local*" -or 
+                    $_.DnsNameList -like "*server-vs81t.intranet.local*" 
+                }
+                
+                if ($certificates) {
+                    $cert = $certificates | Select-Object -First 1
+                    $CertificateThumbprint = $cert.Thumbprint
+                    Write-Success "Found SSL certificate in store: $($cert.Subject) (Thumbprint: $CertificateThumbprint)"
+                } else {
+                    Write-Warning "No SSL certificate found for server-vs81t.intranet.local in certificate store"
+                }
+            }
+            
+            if (-not $CertificateThumbprint) {
+                Write-Warning "No SSL certificate available. Please place a .pfx/.p12 certificate file in C:\Cert\ or manually bind a certificate."
+            }
+            
+            # Remove any conflicting sites on the same port
+            Write-Host "Checking for conflicting sites on port $Port..."
+            $conflictingSites = Get-IISSite | Where-Object {
+                $_.Bindings | Where-Object { $_.BindingInformation -like "*:$Port*" }
+            }
+            foreach ($conflictingSite in $conflictingSites) {
+                if ($conflictingSite.Name -ne $SiteName) {
+                    Write-Warning "Found conflicting site '$($conflictingSite.Name)' on port $Port. Please resolve manually."
+                }
+            }
+            
+            # Create IIS site as standalone site (not sub-site)
+            Write-Host "Creating standalone IIS site: $SiteName"
+            try {
+                # Create site with proper binding information for standalone site
+                $site = New-IISSite -Name $SiteName -PhysicalPath $appPath -BindingInformation "*:$Port:" -Protocol https
+                Write-Success "IIS site '$SiteName' created successfully as standalone site"
+                
+                # Bind SSL certificate if found
+                if ($CertificateThumbprint) {
+                    Write-Host "Binding SSL certificate to site..."
+                    try {
+                        # Use netsh for more reliable certificate binding
+                        $bindCommand = "netsh http add sslcert ipport=0.0.0.0:$Port certhash=$CertificateThumbprint appid={12345678-1234-1234-1234-123456789abc}"
+                        Write-Host "Executing: $bindCommand"
+                        
+                        # First, try to remove any existing binding
+                        $deleteCommand = "netsh http delete sslcert ipport=0.0.0.0:$Port"
+                        Invoke-Expression $deleteCommand 2>$null
+                        
+                        # Add the new binding
+                        $result = Invoke-Expression $bindCommand 2>&1
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Success "SSL certificate bound successfully using netsh"
+                        } else {
+                            Write-Warning "netsh binding failed: $result"
+                            # Fall back to IIS method
+                            $binding = Get-IISSiteBinding -Name $SiteName -Protocol https -ErrorAction SilentlyContinue
+                            if ($binding) {
+                                $binding.AddSslCertificate($CertificateThumbprint, "my")
+                                Write-Success "SSL certificate bound successfully using IIS method"
+                            } else {
+                                Write-Warning "Could not find HTTPS binding for site"
+                            }
+                        }
+                    } catch {
+                        Write-Warning "Failed to bind SSL certificate automatically: $($_.Exception.Message)"
+                        Write-Host "Please bind the certificate manually in IIS Manager:"
+                        Write-Host "  1. Open IIS Manager"
+                        Write-Host "  2. Select site '$SiteName'"
+                        Write-Host "  3. Click 'Bindings...' in Actions panel"
+                        Write-Host "  4. Select the HTTPS binding and click 'Edit...'"
+                        Write-Host "  5. Select the SSL certificate with thumbprint: $CertificateThumbprint"
+                    }
+                } else {
+                    Write-Warning "No SSL certificate available for automatic binding"
+                    Write-Host "Please manually configure SSL certificate in IIS Manager after placing certificate in C:\Cert\"
+                }
+            } catch {
+                Write-Error "Failed to create IIS site: $($_.Exception.Message)"
+                throw
+            }
             
             # Configure application pool
             $appPoolName = "$SiteName-AppPool"
@@ -260,7 +371,11 @@ try {
             Write-Host "  Site Name: $SiteName"
             Write-Host "  Port: $Port"
             Write-Host "  Application Path: $appPath"
-            Write-Host "  Note: SSL certificate binding needs to be configured manually in IIS Manager"
+            if ($CertificateThumbprint) {
+                Write-Host "  SSL Certificate: Configured (Thumbprint: $CertificateThumbprint)"
+            } else {
+                Write-Host "  SSL Certificate: Not configured - place .pfx/.p12 file in C:\Cert\ and re-run deployment"
+            }
             Write-Host ""
             
         } catch {

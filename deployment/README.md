@@ -3,12 +3,13 @@
 This deployment system hosts the ExcelAddin service with a clean separation of concerns:
 - **IIS**: Reverse proxy only (HTTPS termination and request forwarding)
 - **Backend**: Python Flask API hosted via NSSM service
-- **Frontend**: React application hosted via PM2 service
+- **Frontend**: React application hosted via NSSM service (Windows-compatible, no PM2)
 
 ## Server Configuration
 - **Service Name**: ExcelAddin
 - **Public Address**: https://server-vs81t.intranet.local:9443
-- **Target Environment**: Windows 10
+- **Target Environment**: Windows 10/11
+- **Certificate Path**: C:\Cert\ (for SSL certificates)
 
 ## Architecture Overview
 
@@ -21,10 +22,17 @@ Excel Client → IIS Proxy (Port 9443) → Backend Service (Port 5000)
 
 1. **Node.js and npm** installed
 2. **Python 3.8+** with pip installed
-3. **PM2** globally installed: `npm install -g pm2`
-4. **NSSM** downloaded and available in PATH
-5. **IIS** with URL Rewrite module installed
-6. **SSL Certificate** configured for the domain
+3. **NSSM** downloaded and available in PATH
+4. **IIS** with URL Rewrite module installed
+5. **SSL Certificate** placed in C:\Cert\ directory (*.pfx or *.p12 format)
+
+## SSL Certificate Configuration
+
+Place your SSL certificate file in `C:\Cert\`:
+- Supported formats: `.pfx` or `.p12`
+- The deployment scripts will automatically import and bind the certificate
+- If no certificate is found in C:\Cert\, the scripts will search the Windows certificate store
+- Manual binding instructions will be provided if automatic binding fails
 
 ## Deployment Scripts
 
@@ -32,7 +40,7 @@ Excel Client → IIS Proxy (Port 9443) → Backend Service (Port 5000)
 ```powershell
 .\deploy-all.ps1
 ```
-Performs complete first-time deployment including service installation and configuration.
+Performs complete first-time deployment including service installation and IIS configuration.
 
 ### Updates After First Run
 ```powershell
@@ -42,8 +50,9 @@ Updates services without reinstalling or reconfiguring infrastructure.
 
 ### Individual Service Deployment
 ```powershell
-.\deploy-backend.ps1   # Deploy Python backend via NSSM
-.\deploy-frontend.ps1  # Deploy React frontend via PM2
+.\deploy-backend.ps1             # Deploy Python backend via NSSM
+.\deploy-frontend.ps1            # Deploy React frontend via NSSM
+.\deploy-frontend.ps1 -ConfigureIIS  # Deploy frontend and configure IIS
 ```
 
 **Note**: Both individual deployment scripts automatically stop and overwrite existing services without requiring the `-Force` flag. This makes re-deployments seamless.
