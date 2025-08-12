@@ -164,7 +164,37 @@ Test-Step "Testing frontend access" {
     }
 }
 
-# Test 10: Check Windows Firewall
+# Test 10: Test backend API through IIS routing
+Test-Step "Testing backend API routing" {
+    try {
+        # Test the backend health endpoint through IIS routing
+        # This should route /excellence/api/health to /excellence/backend/api/health
+        # PowerShell version compatibility
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            $response = Invoke-WebRequest -Uri "https://$ServerName`:$Port/excellence/api/health" -SkipCertificateCheck -UseBasicParsing -TimeoutSec 10
+        } else {
+            # Windows PowerShell 5.1 compatibility
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+            $response = Invoke-WebRequest -Uri "https://$ServerName`:$Port/excellence/api/health" -UseBasicParsing -TimeoutSec 10
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+        }
+        
+        if ($response.StatusCode -eq 200) {
+            $content = $response.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($content -and $content.status -eq "healthy") {
+                return "Backend API accessible via IIS routing (status: $($content.status))"
+            } else {
+                return "Backend API accessible but response format unexpected"
+            }
+        } else {
+            throw "Backend API returned status $($response.StatusCode)"
+        }
+    } catch {
+        throw "Backend API test failed: $($_.Exception.Message)"
+    }
+}
+
+# Test 11: Check Windows Firewall
 Test-Step "Checking Windows Firewall" {
     $firewallRule = Get-NetFirewallRule | Where-Object { $_.DisplayName -like "*Excel*9443*" -or $_.DisplayName -like "*IIS*9443*" } | Select-Object -First 1
     if ($firewallRule) {
@@ -184,6 +214,7 @@ if ($testsPassed -eq $totalTests) {
     Write-Host "  Main site: https://$ServerName`:$Port/excellence/" -ForegroundColor White
     Write-Host "  Health check: https://$ServerName`:$Port/health" -ForegroundColor White
     Write-Host "  Taskpane: https://$ServerName`:$Port/excellence/taskpane.html" -ForegroundColor White
+    Write-Host "  Backend API: https://$ServerName`:$Port/excellence/api/health" -ForegroundColor White
 } else {
     Write-Host "`n✗ Some tests failed. Please check the issues above." -ForegroundColor Red
     Write-Host "Common solutions:" -ForegroundColor Yellow
@@ -191,7 +222,7 @@ if ($testsPassed -eq $totalTests) {
     Write-Host "  2. Run .\setup-iis.ps1 -Force to reconfigure" -ForegroundColor White
     Write-Host "  3. Check that frontend files are built and deployed" -ForegroundColor White
     Write-Host "  4. Verify SSL certificate is properly configured" -ForegroundColor White
-    Write-Host "  5. Ensure Flask backend is running on port 5000" -ForegroundColor White
+    Write-Host "  5. Run backend setup manually: .\deployment\scripts\setup-backend-iis.ps1" -ForegroundColor White
 }
 
 Write-Host "="*50 -ForegroundColor Yellow

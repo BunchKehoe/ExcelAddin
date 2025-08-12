@@ -20,6 +20,25 @@ if (environment === 'development') {
   });
 }
 
+// Add response interceptor for better error handling
+apiClient.interceptors.response.use(
+  response => response,
+  error => {
+    console.error('🚨 API Error:', error.response?.status, error.message);
+    
+    // Add environment-specific error context
+    if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+      if (environment === 'development') {
+        error.developmentHint = 'Backend server may not be running. Try: python backend/run.py';
+      } else {
+        error.productionHint = 'Backend API server may be down or misconfigured.';
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 interface DownloadDataParams {
   fund: string;
   dataType: string;

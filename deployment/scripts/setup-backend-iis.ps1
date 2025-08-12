@@ -143,18 +143,18 @@ catch {
 if ($Uninstall) {
     Write-Host "Uninstall mode - removing IIS configuration..." -ForegroundColor Yellow
     
-    # Remove the backend application if it exists
-    $backendApp = Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue
+    # Remove the nested backend application
+    $backendApp = Get-WebApplication -Name "excellence/backend" -Site $SiteName -ErrorAction SilentlyContinue
     if ($backendApp) {
-        Remove-WebApplication -Name "backend" -Site $SiteName
+        Remove-WebApplication -Name "excellence/backend" -Site $SiteName
         Write-Host "[OK] Removed backend web application from site $SiteName" -ForegroundColor Green
     }
     
-    # Also remove from Default Web Site if it exists there
-    $defaultBackendApp = Get-WebApplication -Name "backend" -Site "Default Web Site" -ErrorAction SilentlyContinue
-    if ($defaultBackendApp) {
-        Remove-WebApplication -Name "backend" -Site "Default Web Site"
-        Write-Host "[OK] Removed backend web application from Default Web Site" -ForegroundColor Green
+    # Also check for any other backend applications
+    $allBackendApps = Get-WebApplication -Site $SiteName -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*backend*" }
+    foreach ($app in $allBackendApps) {
+        Remove-WebApplication -Name $app.Name -Site $SiteName
+        Write-Host "[OK] Removed backend application: $($app.Name)" -ForegroundColor Green
     }
     
     # Remove backend directory
@@ -236,24 +236,29 @@ catch {
 
 # Create the IIS web application for backend
 try {
-    # Check if there's an existing application and remove it if Force is used
-    $virtualPath = "/excellence/backend"
-    $existingApp = Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue
-    if ($existingApp) {
-        if ($Force) {
-            Remove-WebApplication -Name "backend" -Site $SiteName
-            Write-Host "[INFO] Removed existing backend application (Force mode)" -ForegroundColor Yellow
-        } else {
-            Write-Warning "Backend application already exists. Use -Force to overwrite."
-            Write-Host "[INFO] Skipping application creation, will only update files and config" -ForegroundColor Yellow
-        }
+    # The backend needs to be accessible at /excellence/backend/ path
+    # First ensure the excellence application exists or create it
+    $excellenceApp = Get-WebApplication -Name "excellence" -Site $SiteName -ErrorAction SilentlyContinue
+    if (-not $excellenceApp) {
+        # Create excellence application first
+        New-WebApplication -Name "excellence" -Site $SiteName -PhysicalPath $ExcellenceDir -ApplicationPool "DefaultAppPool"
+        Write-Host "[OK] Created excellence application at $ExcellenceDir" -ForegroundColor Green
     }
     
-    # Create new application if it doesn't exist
-    if (-not (Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue)) {
-        New-WebApplication -Name "backend" -Site $SiteName -PhysicalPath $BackendPath -ApplicationPool "DefaultAppPool"
-        Write-Host "[OK] Created IIS application 'backend' at $BackendPath" -ForegroundColor Green
-        Write-Host "[OK] Virtual path: $virtualPath" -ForegroundColor Green
+    # Now create the backend as a nested application under excellence
+    $backendApp = Get-WebApplication -Name "excellence/backend" -Site $SiteName -ErrorAction SilentlyContinue
+    if ($backendApp -and $Force) {
+        Remove-WebApplication -Name "excellence/backend" -Site $SiteName
+        Write-Host "[INFO] Removed existing backend application (Force mode)" -ForegroundColor Yellow
+        $backendApp = $null
+    }
+    
+    if (-not $backendApp) {
+        New-WebApplication -Name "excellence/backend" -Site $SiteName -PhysicalPath $BackendPath -ApplicationPool "DefaultAppPool"
+        Write-Host "[OK] Created IIS application 'excellence/backend' at $BackendPath" -ForegroundColor Green
+        Write-Host "[OK] Virtual path: /excellence/backend" -ForegroundColor Green
+    } else {
+        Write-Host "[INFO] Backend application already exists at /excellence/backend" -ForegroundColor Yellow
     }
 }
 catch {

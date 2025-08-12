@@ -19,6 +19,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import { getRawDataCategories, getRawDataFunds, downloadRawData } from '../api/apiClient';
+import { environment } from '../../config/environment';
 
 const DatabasePage: React.FC = () => {
   const [categories, setCategories] = useState<string[]>([]);
@@ -69,7 +70,11 @@ const DatabasePage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading categories:', error);
-      setError('Failed to connect to backend. For local development, run "python backend/run.py" to start the backend server.');
+      if (environment === 'development') {
+        setError('Failed to connect to backend. For local development, run "python backend/run.py" to start the backend server.');
+      } else {
+        setError('Failed to connect to backend. Please check server configuration and ensure the backend API is running.');
+      }
       // Fallback to mock data
       setCategories(['SAMPLE_CATEGORY_1', 'SAMPLE_CATEGORY_2']);
     }
