@@ -130,13 +130,51 @@ if (!fs.existsSync(STATIC_DIR)) {
 // Create HTTP server
 const server = http.createServer(handleRequest);
 
-// Start server
+// Add error handling for server creation
+server.on('error', (err) => {
+  console.error(`HTTP server error: ${err.message}`);
+  console.error(`Error code: ${err.code}`);
+  
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use by another application.`);
+    console.error('Please check if another service is running on this port:');
+    console.error(`  netstat -ano | findstr :${PORT}`);
+  } else if (err.code === 'EACCES') {
+    console.error(`Permission denied to bind to port ${PORT}.`);
+    console.error('Try running as administrator or use a different port.');
+  }
+  
+  process.exit(1);
+});
+
+// Start server with better error handling
 server.listen(PORT, HOST, () => {
   console.log(`ExcelAddin Frontend Server started successfully`);
   console.log(`Server: http://${HOST}:${PORT}`);
   console.log(`Static files: ${STATIC_DIR}`);
   console.log(`Process ID: ${process.pid}`);
   console.log(`Node version: ${process.version}`);
+  console.log(`Startup time: ${new Date().toISOString()}`);
+  
+  // Verify the server is actually listening by testing the port
+  setTimeout(() => {
+    const testClient = http.get(`http://${HOST}:${PORT}/`, (res) => {
+      console.log(`Self-test successful: HTTP ${res.statusCode}`);
+      res.on('data', () => {}); // consume data
+      res.on('end', () => {
+        console.log('Server is ready and responding to requests');
+      });
+    }).on('error', (err) => {
+      console.error(`Self-test failed: ${err.message}`);
+      console.error('Server may not be properly bound to the port');
+    });
+    
+    testClient.setTimeout(5000, () => {
+      testClient.destroy();
+      console.error('Self-test timed out - server may not be responding');
+    });
+  }, 1000);
+  
   console.log('Press Ctrl+C to stop');
 });
 

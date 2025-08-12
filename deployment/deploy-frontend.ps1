@@ -150,6 +150,15 @@ try {
         nssm set $ServiceName AppDirectory $FrontendPath
         nssm set $ServiceName Start SERVICE_AUTO_START
         
+        # Configure restart behavior for better reliability
+        nssm set $ServiceName AppExit Default Restart
+        nssm set $ServiceName AppRestartDelay 5000
+        nssm set $ServiceName AppStopMethodSkip 0
+        nssm set $ServiceName AppStopMethodConsole 10000
+        nssm set $ServiceName AppStopMethodWindow 10000
+        nssm set $ServiceName AppStopMethodThreads 10000
+        nssm set $ServiceName AppThrottle 5000
+        
         # Configure logging
         $logDir = "C:\Logs\ExcelAddin"
         if (-not (Test-Path $logDir)) {
@@ -167,6 +176,24 @@ try {
         nssm set $ServiceName AppEnvironmentExtra NODE_ENV=production PORT=3000 HOST=127.0.0.1
         
         Write-Success "NSSM service configured successfully"
+        
+        # Check for port conflicts before starting
+        Write-Host "Checking for port conflicts..."
+        try {
+            $portConflict = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+            if ($portConflict) {
+                Write-Warning "Port 3000 is already in use by process ID: $($portConflict.OwningProcess)"
+                $conflictProcess = Get-Process -Id $portConflict.OwningProcess -ErrorAction SilentlyContinue
+                if ($conflictProcess) {
+                    Write-Warning "Conflicting process: $($conflictProcess.ProcessName) (PID: $($conflictProcess.Id))"
+                }
+                Write-Host "The service may fail to start due to this port conflict."
+            } else {
+                Write-Success "Port 3000 is available"
+            }
+        } catch {
+            Write-Host "Could not check for port conflicts (this is normal on some Windows versions)"
+        }
     }
     # Start the service
     Write-Header "Starting Frontend Service"
@@ -179,16 +206,66 @@ try {
         if ($service.Status -eq "Running") {
             Write-Success "Frontend service started successfully"
             
-            # Verify service is responding
-            Start-Sleep -Seconds 5
+            # Wait a bit longer for the service to fully initialize
+            Write-Host "Waiting for service to initialize..."
+            Start-Sleep -Seconds 10
+            
+            # Check if port is actually listening
+            Write-Host "Verifying port 3000 is listening..."
             try {
-                $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
-                Write-Success "Frontend service is responding - HTTP Status: $($response.StatusCode)"
+                $portTest = Test-NetConnection -ComputerName "127.0.0.1" -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
+                if ($portTest) {
+                    Write-Success "Port 3000 is listening"
+                    
+                    # Now test HTTP response
+                    Write-Host "Testing HTTP response..."
+                    try {
+                        $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 15
+                        Write-Success "Frontend service is responding - HTTP Status: $($response.StatusCode)"
+                    } catch {
+                        Write-Warning "Port is listening but HTTP request failed: $($_.Exception.Message)"
+                        Write-Host "This may indicate a server configuration issue."
+                        
+                        # Show recent service logs if available
+                        $logFile = "C:\Logs\ExcelAddin\frontend-stderr.log"
+                        if (Test-Path $logFile) {
+                            Write-Host ""
+                            Write-Host "Recent error logs:"
+                            Get-Content $logFile -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                        }
+                    }
+                } else {
+                    Write-Warning "Service is running but port 3000 is not listening"
+                    Write-Host "This indicates a server startup failure."
+                    
+                    # Show service logs for debugging
+                    $logFile = "C:\Logs\ExcelAddin\frontend-stdout.log"
+                    if (Test-Path $logFile) {
+                        Write-Host ""
+                        Write-Host "Recent service logs:"
+                        Get-Content $logFile -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                    }
+                    
+                    $errorLogFile = "C:\Logs\ExcelAddin\frontend-stderr.log"
+                    if (Test-Path $errorLogFile) {
+                        Write-Host ""
+                        Write-Host "Recent error logs:"
+                        Get-Content $errorLogFile -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+                    }
+                }
             } catch {
-                Write-Warning "Frontend service is running but not responding to HTTP requests"
+                Write-Warning "Port connectivity test failed: $($_.Exception.Message)"
             }
         } else {
-            Write-Error "Frontend service failed to start"
+            Write-Error "Frontend service failed to start - Status: $($service.Status)"
+            
+            # Show service logs for debugging
+            $logFile = "C:\Logs\ExcelAddin\frontend-stderr.log"
+            if (Test-Path $logFile) {
+                Write-Host ""
+                Write-Host "Recent error logs:"
+                Get-Content $logFile -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+            }
             exit 1
         }
     } catch {

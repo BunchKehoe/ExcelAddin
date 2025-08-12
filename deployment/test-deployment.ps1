@@ -110,11 +110,50 @@ try {
     # Test Frontend HTTP Response
     Write-Host "Testing frontend HTTP response..."
     try {
-        $frontendResponse = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
-        $frontendPassed = $frontendResponse.StatusCode -eq 200
-        Add-TestResult -TestName "Frontend HTTP Response" -Passed $frontendPassed -Message "HTTP Status: $($frontendResponse.StatusCode)"
+        # First check if port is listening
+        $portListening = Test-NetConnection -ComputerName "127.0.0.1" -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
+        if (-not $portListening) {
+            Add-TestResult -TestName "Frontend HTTP Response" -Passed $false -Message "Port 3000 not listening" -Details "Frontend service may not be running or may have failed to bind to port"
+        } else {
+            $frontendResponse = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
+            $frontendPassed = $frontendResponse.StatusCode -eq 200
+            Add-TestResult -TestName "Frontend HTTP Response" -Passed $frontendPassed -Message "HTTP Status: $($frontendResponse.StatusCode)"
+        }
     } catch {
         Add-TestResult -TestName "Frontend HTTP Response" -Passed $false -Message "HTTP request failed" -Details $_.Exception.Message
+        
+        # Additional diagnostics for frontend failures
+        Write-Host "Performing additional frontend diagnostics..." -ForegroundColor Yellow
+        
+        # Check service status
+        $frontendService = Get-Service -Name "ExcelAddin-Frontend" -ErrorAction SilentlyContinue
+        if ($frontendService) {
+            Write-Host "  Frontend service status: $($frontendService.Status)" -ForegroundColor Gray
+        } else {
+            Write-Host "  Frontend service not found" -ForegroundColor Gray
+        }
+        
+        # Check for port conflicts
+        try {
+            $portConflict = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+            if ($portConflict) {
+                $conflictProcess = Get-Process -Id $portConflict.OwningProcess -ErrorAction SilentlyContinue
+                if ($conflictProcess) {
+                    Write-Host "  Port 3000 in use by: $($conflictProcess.ProcessName) (PID: $($conflictProcess.Id))" -ForegroundColor Gray
+                }
+            } else {
+                Write-Host "  Port 3000 is not in use" -ForegroundColor Gray
+            }
+        } catch {
+            Write-Host "  Could not check port usage" -ForegroundColor Gray
+        }
+        
+        # Check recent logs
+        $logFile = "C:\Logs\ExcelAddin\frontend-stderr.log"
+        if (Test-Path $logFile) {
+            Write-Host "  Recent error log entries:" -ForegroundColor Gray
+            Get-Content $logFile -Tail 3 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+        }
     }
     
     # Test 4: External Access Tests (if not skipped)
