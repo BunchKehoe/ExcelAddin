@@ -1,9 +1,9 @@
 # PowerShell script to set up Excel Add-in Backend with IIS (replacing NSSM)
-# Usage: .\setup-backend-iis.ps1 -BackendPath "C:\inetpub\wwwroot\ExcelAddin\backend"
+# Usage: .\setup-backend-iis.ps1 -SiteName "ExcelAddin"
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$BackendPath = "C:\inetpub\wwwroot\ExcelAddin\backend",
+    [string]$SiteName = "ExcelAddin",
     
     [Parameter(Mandatory=$false)]
     [string]$PythonPath = "",
@@ -33,14 +33,21 @@ if (-not (Test-Administrator)) {
 Write-Host "Excel Add-in Backend IIS Setup (replacing NSSM)" -ForegroundColor Cyan
 Write-Host "=" * 60
 
-# Validate backend directory
-if (-not (Test-Path $BackendPath)) {
-    Write-Error "Backend directory not found: $BackendPath"
+# Variables
+$WebsiteRoot = "C:\inetpub\wwwroot\$SiteName"
+$ExcellenceDir = Join-Path $WebsiteRoot "excellence"
+$BackendPath = Join-Path $ExcellenceDir "backend"
+$ProjectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$SourceBackendPath = Join-Path $ProjectRoot "backend"
+
+# Validate source backend directory
+if (-not (Test-Path $SourceBackendPath)) {
+    Write-Error "Source backend directory not found: $SourceBackendPath"
     exit 1
 }
 
-if (-not (Test-Path "$BackendPath\app.py")) {
-    Write-Error "app.py not found in $BackendPath"
+if (-not (Test-Path "$SourceBackendPath\app.py")) {
+    Write-Error "app.py not found in $SourceBackendPath"
     exit 1
 }
 
@@ -128,10 +135,23 @@ if ($Uninstall) {
     Write-Host "Uninstall mode - removing IIS configuration..." -ForegroundColor Yellow
     
     # Remove the backend application if it exists
-    $backendApp = Get-WebApplication -Name "backend" -Site "Default Web Site" -ErrorAction SilentlyContinue
+    $backendApp = Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue
     if ($backendApp) {
+        Remove-WebApplication -Name "backend" -Site $SiteName
+        Write-Host "[OK] Removed backend web application from site $SiteName" -ForegroundColor Green
+    }
+    
+    # Also remove from Default Web Site if it exists there
+    $defaultBackendApp = Get-WebApplication -Name "backend" -Site "Default Web Site" -ErrorAction SilentlyContinue
+    if ($defaultBackendApp) {
         Remove-WebApplication -Name "backend" -Site "Default Web Site"
-        Write-Host "[OK] Removed backend web application" -ForegroundColor Green
+        Write-Host "[OK] Removed backend web application from Default Web Site" -ForegroundColor Green
+    }
+    
+    # Remove backend directory
+    if (Test-Path $BackendPath) {
+        Remove-Item $BackendPath -Recurse -Force
+        Write-Host "[OK] Removed backend directory: $BackendPath" -ForegroundColor Green
     }
     
     Write-Host "Uninstall completed successfully!" -ForegroundColor Green
@@ -139,21 +159,93 @@ if ($Uninstall) {
 }
 
 # Create IIS Application for backend
-Write-Host "Creating IIS application for backend..." -ForegroundColor Yellow
+Write-Host "Creating IIS backend application and deploying files..." -ForegroundColor Yellow
 
-# Remove existing application if it exists (when Force is used)
+# Ensure the website exists
+try {
+    $website = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
+    if (-not $website) {
+        Write-Error "IIS website '$SiteName' not found. Please run deploy-to-existing-iis.ps1 first."
+        exit 1
+    }
+    Write-Host "[OK] Found IIS website: $SiteName" -ForegroundColor Green
+}
+catch {
+    Write-Error "Failed to check IIS website: $($_.Exception.Message)"
+    exit 1
+}
+
+# Ensure excellence directory exists
+if (-not (Test-Path $ExcellenceDir)) {
+    New-Item -ItemType Directory -Path $ExcellenceDir -Force | Out-Null
+    Write-Host "[OK] Created excellence directory: $ExcellenceDir" -ForegroundColor Green
+}
+
+# Remove existing backend if Force is used
 if ($Force) {
-    $existingApp = Get-WebApplication -Name "backend" -Site "Default Web Site" -ErrorAction SilentlyContinue
+    $existingApp = Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue
     if ($existingApp) {
-        Remove-WebApplication -Name "backend" -Site "Default Web Site"
+        Remove-WebApplication -Name "backend" -Site $SiteName
         Write-Host "[INFO] Removed existing backend application" -ForegroundColor Yellow
+    }
+    
+    if (Test-Path $BackendPath) {
+        Remove-Item $BackendPath -Recurse -Force
+        Write-Host "[INFO] Removed existing backend directory" -ForegroundColor Yellow
     }
 }
 
-# Create the web application
+# Create backend directory and copy files
+if (-not (Test-Path $BackendPath)) {
+    New-Item -ItemType Directory -Path $BackendPath -Force | Out-Null
+}
+
+Write-Host "Copying backend files from $SourceBackendPath to $BackendPath..." -ForegroundColor Yellow
 try {
-    New-WebApplication -Name "backend" -Site "Default Web Site" -PhysicalPath $BackendPath -ApplicationPool "DefaultAppPool"
-    Write-Host "[OK] Created IIS application 'backend' at $BackendPath" -ForegroundColor Green
+    # Copy all backend files except __pycache__ and other temp files
+    $excludeItems = @("__pycache__", "*.pyc", ".pytest_cache", "venv", ".venv", "node_modules")
+    robocopy $SourceBackendPath $BackendPath /E /XD $excludeItems /XF "*.pyc" /NFL /NDL /NJH /NJS
+    
+    # Verify key files were copied
+    $keyFiles = @("app.py", "wsgi_app.py", "web.config", "pyproject.toml")
+    foreach ($file in $keyFiles) {
+        $filePath = Join-Path $BackendPath $file
+        if (Test-Path $filePath) {
+            Write-Host "[OK] $file copied successfully" -ForegroundColor Green
+        } elseif ($file -eq "pyproject.toml" -or $file -eq "requirements.txt") {
+            # Optional files
+            Write-Host "[INFO] $file not found (optional)" -ForegroundColor Yellow
+        } else {
+            Write-Warning "Required file missing: $file"
+        }
+    }
+}
+catch {
+    Write-Error "Failed to copy backend files: $($_.Exception.Message)"
+    exit 1
+}
+
+# Create the IIS web application for backend
+try {
+    # Check if there's an existing application and remove it if Force is used
+    $virtualPath = "/excellence/backend"
+    $existingApp = Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue
+    if ($existingApp) {
+        if ($Force) {
+            Remove-WebApplication -Name "backend" -Site $SiteName
+            Write-Host "[INFO] Removed existing backend application (Force mode)" -ForegroundColor Yellow
+        } else {
+            Write-Warning "Backend application already exists. Use -Force to overwrite."
+            Write-Host "[INFO] Skipping application creation, will only update files and config" -ForegroundColor Yellow
+        }
+    }
+    
+    # Create new application if it doesn't exist
+    if (-not (Get-WebApplication -Name "backend" -Site $SiteName -ErrorAction SilentlyContinue)) {
+        New-WebApplication -Name "backend" -Site $SiteName -PhysicalPath $BackendPath -ApplicationPool "DefaultAppPool"
+        Write-Host "[OK] Created IIS application 'backend' at $BackendPath" -ForegroundColor Green
+        Write-Host "[OK] Virtual path: $virtualPath" -ForegroundColor Green
+    }
 }
 catch {
     Write-Error "Failed to create IIS application: $($_.Exception.Message)"
@@ -196,12 +288,19 @@ if (Test-Path $webConfigPath) {
         $webConfig = $webConfig -replace 'C:\\Python39\\python\.exe', $PythonPath
         $pythonLibPath = (Split-Path $PythonPath -Parent) + '\Lib\site-packages\wfastcgi.py'
         $webConfig = $webConfig -replace 'C:\\Python39\\Lib\\site-packages\\wfastcgi\.py', $pythonLibPath
+        
+        # Update PYTHONPATH to point to the correct backend directory
+        $webConfig = $webConfig -replace 'C:\\inetpub\\wwwroot\\ExcelAddin\\backend', $BackendPath.Replace('\', '\\')
+        
         $webConfig | Set-Content $webConfigPath
         Write-Host "[OK] Updated web.config with Python path: $PythonPath" -ForegroundColor Green
+        Write-Host "[OK] Updated PYTHONPATH to: $BackendPath" -ForegroundColor Green
     }
     catch {
         Write-Warning "Failed to update web.config: $($_.Exception.Message)"
     }
+} else {
+    Write-Warning "web.config not found at: $webConfigPath - backend may not work correctly"
 }
 
 # Test the backend application
@@ -218,21 +317,41 @@ finally {
     Pop-Location
 }
 
+# Set proper permissions for backend directory
+Write-Host "Setting directory permissions..." -ForegroundColor Yellow
+try {
+    $acl = Get-Acl $BackendPath
+    $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule("IIS_IUSRS", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $acl.SetAccessRule($accessRule)
+    $accessRule2 = New-Object System.Security.AccessControl.FileSystemAccessRule("IUSR", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $acl.SetAccessRule($accessRule2)
+    Set-Acl -Path $BackendPath -AclObject $acl
+    Write-Host "[OK] Directory permissions configured for IIS" -ForegroundColor Green
+} catch {
+    Write-Warning "Could not set directory permissions: $($_.Exception.Message)"
+}
+
 Write-Host ""
 Write-Host "Setup completed successfully!" -ForegroundColor Green
 Write-Host "=" * 50
 Write-Host "Backend Configuration:" -ForegroundColor Cyan
-Write-Host "• IIS Application: /backend"
+Write-Host "• IIS Website: $SiteName"
+Write-Host "• Backend Application: /excellence/backend"
 Write-Host "• Physical Path: $BackendPath"
 Write-Host "• Python Path: $PythonPath"
 Write-Host "• WSGI Handler: wsgi_app.application"
 Write-Host ""
+Write-Host "Architecture:" -ForegroundColor Yellow
+Write-Host "• Frontend: https://yourserver/$SiteName/excellence/"
+Write-Host "• API Calls: https://yourserver/$SiteName/excellence/api/* → /excellence/backend/api/*"
+Write-Host "• Health Check: https://yourserver/$SiteName/excellence/backend/api/health"
+Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "1. Verify IIS can serve the backend at: http://localhost/backend/api/health"
-Write-Host "2. Update the main web.config to route API calls to /backend/"
-Write-Host "3. Test the Excel add-in with the new configuration"
+Write-Host "1. Run the full deployment: .\build-and-deploy-iis.ps1 -SiteName '$SiteName'"
+Write-Host "2. Test the API: Test-WebRequest https://yourserver/$SiteName/excellence/api/health"
+Write-Host "3. Load the Excel add-in using the manifest file"
 Write-Host ""
 Write-Host "Troubleshooting:" -ForegroundColor Yellow
 Write-Host "• Check IIS logs at: C:\inetpub\logs\LogFiles\"
-Write-Host "• Check Python errors in IIS Manager > Application > Failed Request Tracing"
-Write-Host "• Test backend directly: python wsgi_app.py"
+Write-Host "• Check application in IIS Manager: Sites → $SiteName → backend"
+Write-Host "• Verify routing in main web.config: /excellence/api/* → /excellence/backend/api/*"
