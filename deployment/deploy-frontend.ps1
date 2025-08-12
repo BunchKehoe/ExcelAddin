@@ -4,7 +4,8 @@
 param(
     [switch]$Force,      # Kept for compatibility but not required for overwriting services
     [switch]$SkipBuild,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$ConfigureIIS  # New parameter to optionally configure IIS
 )
 
 # Import common functions
@@ -195,6 +196,79 @@ try {
         exit 1
     }
     
+    # Configure IIS if requested
+    if ($ConfigureIIS) {
+        Write-Header "Configuring IIS Reverse Proxy"
+        
+        $SiteName = "ExcelAddin"
+        $Port = 9443
+        
+        try {
+            # Import WebAdministration module
+            Import-Module WebAdministration -ErrorAction SilentlyContinue
+            if (-not (Get-Module WebAdministration)) {
+                Write-Error "WebAdministration module not available. IIS may not be properly installed."
+                exit 1
+            }
+            
+            # Check if site already exists
+            $existingSite = Get-IISSite -Name $SiteName -ErrorAction SilentlyContinue
+            if ($existingSite) {
+                Write-Host "Removing existing IIS site..."
+                Remove-IISSite -Name $SiteName -Confirm:$false
+                Start-Sleep -Seconds 2
+            }
+            
+            # Create application directory
+            $appPath = "C:\inetpub\wwwroot\$SiteName"
+            if (-not (Test-Path $appPath)) {
+                New-Item -ItemType Directory -Path $appPath -Force | Out-Null
+                Write-Host "Created application directory: $appPath"
+            }
+            
+            # Copy web.config
+            $webConfigSource = "$PSScriptRoot\config\web.config"
+            $webConfigDest = "$appPath\web.config"
+            if (Test-Path $webConfigSource) {
+                Copy-Item $webConfigSource $webConfigDest -Force
+                Write-Host "Copied web.config to application directory"
+            } else {
+                Write-Warning "web.config not found at $webConfigSource"
+            }
+            
+            # Create IIS site
+            Write-Host "Creating IIS site: $SiteName"
+            New-IISSite -Name $SiteName -PhysicalPath $appPath -BindingInformation "*:$Port" -Protocol https
+            
+            # Configure application pool
+            $appPoolName = "$SiteName-AppPool"
+            if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
+                Remove-IISAppPool -Name $appPoolName -Confirm:$false
+            }
+            
+            New-IISAppPool -Name $appPoolName
+            Set-IISAppPool -Name $appPoolName -ManagedRuntimeVersion ""  # No managed code needed for reverse proxy
+            Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processModel.identityType -Value ApplicationPoolIdentity
+            Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name applicationPool -Value $appPoolName
+            
+            # Start the site
+            Start-IISSite -Name $SiteName
+            Write-Success "IIS site configured and started"
+            
+            Write-Host ""
+            Write-Host "IIS Configuration Complete:"
+            Write-Host "  Site Name: $SiteName"
+            Write-Host "  Port: $Port"
+            Write-Host "  Application Path: $appPath"
+            Write-Host "  Note: SSL certificate binding needs to be configured manually in IIS Manager"
+            Write-Host ""
+            
+        } catch {
+            Write-Warning "IIS configuration failed: $($_.Exception.Message)"
+            Write-Host "You can configure IIS manually or run deploy-all.ps1 for complete setup"
+        }
+    }
+    
     Write-Header "Frontend Deployment Complete"
     Write-Success "ExcelAddin Frontend has been deployed successfully"
     Write-Host ""
@@ -204,6 +278,16 @@ try {
     Write-Host "  Status: Running"
     Write-Host "  URL: http://127.0.0.1:3000"
     Write-Host ""
+    if ($ConfigureIIS) {
+        Write-Host "IIS Configuration:"
+        Write-Host "  Site: ExcelAddin"
+        Write-Host "  Public URL: https://server-vs81t.intranet.local:9443"
+        Write-Host ""
+    } else {
+        Write-Host "Note: Run with -ConfigureIIS to set up IIS reverse proxy"
+        Write-Host "Or use deploy-all.ps1 for complete deployment"
+        Write-Host ""
+    }
     Write-Host "Service Management Commands:"
     Write-Host "  Status: Get-Service -Name '$ServiceName'"
     Write-Host "  Start: Start-Service -Name '$ServiceName'"

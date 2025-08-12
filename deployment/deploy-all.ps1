@@ -26,21 +26,20 @@ if (-not (Test-Prerequisites)) {
     exit 1
 }
 
-try {
-    # Clean up any existing PM2 configurations
-    Write-Header "Step 0: Clean up PM2 (if present)"
-    
-    $cleanupScript = "$PSScriptRoot\scripts\cleanup-pm2.ps1"
-    if (Test-Path $cleanupScript) {
-        try {
-            & $cleanupScript -Force
-            Write-Success "PM2 cleanup completed"
-        } catch {
-            Write-Warning "PM2 cleanup had issues, but continuing: $($_.Exception.Message)"
-        }
-    } else {
-        Write-Host "PM2 cleanup script not found, skipping..."
+# Clean up any existing PM2 configurations
+Write-Header "Step 0: Clean up PM2 (if present)"
+
+$cleanupScript = "$PSScriptRoot\scripts\cleanup-pm2.ps1"
+if (Test-Path $cleanupScript) {
+    try {
+        & $cleanupScript -Force
+        Write-Success "PM2 cleanup completed"
+    } catch {
+        Write-Warning "PM2 cleanup had issues, but continuing: $($_.Exception.Message)"
     }
+} else {
+    Write-Host "PM2 cleanup script not found, skipping..."
+}
 
 try {
     # Deploy Backend Service
@@ -131,8 +130,12 @@ try {
             Write-Host "Binding SSL certificate to site..."
             try {
                 $binding = Get-IISSiteBinding -Name $SiteName -Protocol https
-                $binding.AddSslCertificate($CertificateThumbprint, "my")
-                Write-Success "SSL certificate bound successfully"
+                if ($binding) {
+                    $binding.AddSslCertificate($CertificateThumbprint, "my")
+                    Write-Success "SSL certificate bound successfully"
+                } else {
+                    Write-Warning "Could not find HTTPS binding for site"
+                }
             } catch {
                 Write-Warning "Failed to bind SSL certificate automatically: $($_.Exception.Message)"
                 Write-Host "Please bind the certificate manually in IIS Manager"
@@ -192,21 +195,17 @@ try {
     }
     
     # Check frontend service
-    try {
-        $pm2Status = pm2 jlist | ConvertFrom-Json | Where-Object { $_.name -eq "exceladdin-frontend" }
-        if ($pm2Status -and $pm2Status.pm2_env.status -eq "online") {
-            Write-Success "Frontend service: Online"
-            try {
-                $frontendCheck = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
-                Write-Success "Frontend health check: HTTP $($frontendCheck.StatusCode)"
-            } catch {
-                Write-Warning "Frontend health check failed: $($_.Exception.Message)"
-            }
-        } else {
-            Write-Error "Frontend service is not online"
+    $frontendService = Get-Service -Name "ExcelAddin-Frontend" -ErrorAction SilentlyContinue
+    if ($frontendService -and $frontendService.Status -eq "Running") {
+        Write-Success "Frontend service: Running"
+        try {
+            $frontendCheck = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
+            Write-Success "Frontend health check: HTTP $($frontendCheck.StatusCode)"
+        } catch {
+            Write-Warning "Frontend health check failed: $($_.Exception.Message)"
         }
-    } catch {
-        Write-Error "Could not check frontend service status"
+    } else {
+        Write-Error "Frontend service is not running"
     }
     
     # Check IIS site
@@ -225,7 +224,7 @@ try {
     Write-Host "Service Information:"
     Write-Host "- Backend: ExcelAddin-Backend (NSSM Service)"
     Write-Host "  Health: http://127.0.0.1:5000/api/health"
-    Write-Host "- Frontend: exceladdin-frontend (PM2 Service)"
+    Write-Host "- Frontend: ExcelAddin-Frontend (NSSM Service)"
     Write-Host "  Local: http://127.0.0.1:3000"
     Write-Host "- Public URL: https://server-vs81t.intranet.local:$Port"
     Write-Host ""
