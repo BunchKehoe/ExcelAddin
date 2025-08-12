@@ -70,3 +70,6 @@ env/
 
 # Service logs
 logs/
+
+# Backup files
+*-backup.*
