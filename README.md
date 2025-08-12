@@ -86,6 +86,8 @@ This project includes comprehensive documentation organized into three main guid
 
 🔧 **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Comprehensive troubleshooting tools, common issues, solutions, and diagnostic procedures
 
+📜 **[Certificate Guide](CERTIFICATE_GUIDE.md)** - Complete guide for managing Excel Add-in SSL certificates in local development
+
 ## Key Features
 
 - **Database Page**: KVG Data management with fund selection, data type filtering, and Excel integration

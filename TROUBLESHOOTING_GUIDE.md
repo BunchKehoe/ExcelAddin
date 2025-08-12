@@ -40,7 +40,18 @@
 
 ## Common Issues and Solutions
 
-### 1. "Service won't start" (No error messages)
+### 1. Certificate Errors in Excel Add-in
+
+**Symptoms**: Excel shows "The content is blocked because it isn't signed by a valid security certificate"
+
+**Quick Fix**:
+```bash
+npm run cert:install
+```
+
+**Detailed Solution**: See [CERTIFICATE_GUIDE.md](CERTIFICATE_GUIDE.md) for comprehensive certificate management instructions.
+
+### 2. "Service won't start" (No error messages)
 
 **Symptoms**: Service fails to start with no logs or error messages
 
