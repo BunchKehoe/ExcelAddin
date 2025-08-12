@@ -171,71 +171,177 @@ try {
         # Create IIS site as standalone site (not sub-site)
         Write-Host "Creating standalone IIS site: $SiteName"
         try {
-            # Create site with proper binding information for standalone site
-            $site = New-IISSite -Name $SiteName -PhysicalPath $appPath -BindingInformation "*:$Port:" -Protocol https
-            Write-Success "IIS site '$SiteName' created successfully as standalone site"
+            # First ensure we're not creating under Default Web Site by checking existing sites
+            $defaultSite = Get-IISSite -Name "Default Web Site" -ErrorAction SilentlyContinue
+            if ($defaultSite) {
+                # Check if our site already exists as application under Default Web Site
+                $existingApp = Get-IISApp | Where-Object { $_.Path -eq "/$SiteName" -and $_.Site -eq "Default Web Site" }
+                if ($existingApp) {
+                    Write-Host "Removing existing application '$SiteName' from Default Web Site..."
+                    Remove-IISApp -SiteName "Default Web Site" -Name $SiteName -Confirm:$false -ErrorAction SilentlyContinue
+                }
+            }
+            
+            # Create standalone site with explicit binding format for HTTPS
+            # Use the format that ensures it's a root-level site, not an application
+            $bindingInfo = "*:${Port}:"
+            Write-Host "Creating site with binding: $bindingInfo"
+            
+            $site = New-IISSite -Name $SiteName -PhysicalPath $appPath -Port $Port -Protocol https
+            
+            if ($site) {
+                Write-Success "IIS site '$SiteName' created successfully as standalone site"
+                
+                # Verify it's actually a standalone site and not under Default Web Site
+                $createdSite = Get-IISSite -Name $SiteName -ErrorAction SilentlyContinue
+                if ($createdSite -and $createdSite.Name -eq $SiteName) {
+                    Write-Success "Verified: Site created as standalone site (not under Default Web Site)"
+                } else {
+                    Write-Error "Site creation verification failed - may have been created incorrectly"
+                }
+            } else {
+                Write-Error "Failed to create IIS site"
+                exit 1
+            }
+            
+            # Configure application pool first (before certificate binding)
+            Write-Host "Configuring application pool for standalone site..."
+            $appPoolName = "$SiteName-AppPool"
+            if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
+                Write-Host "Removing existing application pool: $appPoolName"
+                Remove-IISAppPool -Name $appPoolName -Confirm:$false
+            }
+            
+            New-IISAppPool -Name $appPoolName
+            Set-IISAppPool -Name $appPoolName -ManagedRuntimeVersion ""  # No managed code needed for reverse proxy
+            Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processModel.identityType -Value ApplicationPoolIdentity
+            
+            # Associate the site with the custom application pool
+            Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name applicationPool -Value $appPoolName
+            Write-Success "Custom application pool configured for standalone site"
             
             # Bind SSL certificate if found
             if ($CertificateThumbprint) {
-                Write-Host "Binding SSL certificate to site..."
+                Write-Host "Binding SSL certificate to standalone site..."
                 try {
-                    # Use netsh for more reliable certificate binding
-                    $bindCommand = "netsh http add sslcert ipport=0.0.0.0:$Port certhash=$CertificateThumbprint appid={12345678-1234-1234-1234-123456789abc}"
+                    # First, ensure the site has proper HTTPS binding
+                    $httpsBinding = Get-IISSiteBinding -Name $SiteName -Protocol https -ErrorAction SilentlyContinue
+                    if (-not $httpsBinding) {
+                        Write-Host "Adding HTTPS binding to site..."
+                        New-IISSiteBinding -Name $SiteName -BindingInformation "*:${Port}:" -Protocol https
+                        Start-Sleep -Seconds 2
+                    }
+                    
+                    # Use netsh for certificate binding to the specific port
+                    $bindCommand = "netsh http add sslcert ipport=0.0.0.0:$Port certhash=$CertificateThumbprint appid={12345678-1234-1234-1234-123456789abc} certstorename=MY"
                     Write-Host "Executing: $bindCommand"
                     
                     # First, try to remove any existing binding
                     $deleteCommand = "netsh http delete sslcert ipport=0.0.0.0:$Port"
                     Invoke-Expression $deleteCommand 2>$null
                     
-                    # Add the new binding
+                    # Add the new binding with certificate store specification
                     $result = Invoke-Expression $bindCommand 2>&1
                     if ($LASTEXITCODE -eq 0) {
-                        Write-Success "SSL certificate bound successfully using netsh"
+                        Write-Success "SSL certificate bound successfully to port $Port using netsh"
+                        
+                        # Also try IIS method as additional confirmation
+                        try {
+                            $binding = Get-IISSiteBinding -Name $SiteName -Protocol https -ErrorAction SilentlyContinue
+                            if ($binding) {
+                                $binding.AddSslCertificate($CertificateThumbprint, "my")
+                                Write-Success "SSL certificate also bound via IIS method"
+                            }
+                        } catch {
+                            Write-Host "IIS method binding skipped (netsh was successful)"
+                        }
+                        
                     } else {
                         Write-Warning "netsh binding failed: $result"
-                        # Fall back to IIS method
+                        
+                        # Fall back to IIS-only method
+                        Write-Host "Trying IIS-only certificate binding method..."
                         $binding = Get-IISSiteBinding -Name $SiteName -Protocol https -ErrorAction SilentlyContinue
                         if ($binding) {
                             $binding.AddSslCertificate($CertificateThumbprint, "my")
                             Write-Success "SSL certificate bound successfully using IIS method"
                         } else {
-                            Write-Warning "Could not find HTTPS binding for site"
+                            Write-Warning "Could not find HTTPS binding for standalone site"
                         }
                     }
                 } catch {
                     Write-Warning "Failed to bind SSL certificate automatically: $($_.Exception.Message)"
-                    Write-Host "Please bind the certificate manually in IIS Manager:"
-                    Write-Host "  1. Open IIS Manager"
-                    Write-Host "  2. Select site '$SiteName'"
-                    Write-Host "  3. Click 'Bindings...' in Actions panel"
-                    Write-Host "  4. Select the HTTPS binding and click 'Edit...'"
-                    Write-Host "  5. Select the SSL certificate with thumbprint: $CertificateThumbprint"
+                    Write-Host ""
+                    Write-Host "Manual Certificate Binding Instructions:"
+                    Write-Host "======================================="
+                    Write-Host "1. Open IIS Manager"
+                    Write-Host "2. Expand 'Sites' in left panel"
+                    Write-Host "3. Click on '$SiteName' (should be standalone site, NOT under Default Web Site)"
+                    Write-Host "4. Click 'Bindings...' in Actions panel on the right"
+                    Write-Host "5. Select the HTTPS binding on port $Port and click 'Edit...'"
+                    Write-Host "6. In SSL Certificate dropdown, select certificate with thumbprint: $CertificateThumbprint"
+                    Write-Host "7. Click OK to save"
+                    Write-Host ""
                 }
             } else {
                 Write-Warning "No SSL certificate available for automatic binding"
-                Write-Host "Please manually configure SSL certificate in IIS Manager after placing certificate in C:\Cert\"
+                Write-Host "Place a .pfx/.p12 certificate file in C:\Cert\ and re-run deployment"
             }
         } catch {
             Write-Error "Failed to create IIS site: $($_.Exception.Message)"
             throw
         }
         
-        # Configure application pool
-        $appPoolName = "$SiteName-AppPool"
-        if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
-            Remove-IISAppPool -Name $appPoolName -Confirm:$false
+        # Start the site
+        Write-Host "Starting standalone IIS site..."
+        try {
+            Start-IISSite -Name $SiteName
+            Write-Success "Standalone IIS site started successfully"
+            
+            # Final verification that site is correctly configured
+            $finalSite = Get-IISSite -Name $SiteName -ErrorAction SilentlyContinue
+            if ($finalSite) {
+                Write-Host ""
+                Write-Host "=== IIS Site Configuration Summary ==="
+                Write-Host "Site Name: $($finalSite.Name)"
+                Write-Host "Site ID: $($finalSite.Id)"
+                Write-Host "Physical Path: $($finalSite.PhysicalPath)"
+                Write-Host "State: $($finalSite.State)"
+                Write-Host "Application Pool: $appPoolName"
+                
+                $bindings = Get-IISSiteBinding -Name $SiteName
+                Write-Host "Bindings:"
+                foreach ($binding in $bindings) {
+                    Write-Host "  - Protocol: $($binding.Protocol), Port: $($binding.Port), Certificate: $($binding.SslFlags -ne 'None')"
+                }
+                
+                # Verify it's NOT under Default Web Site
+                $apps = Get-IISApp | Where-Object { $_.Site -eq "Default Web Site" -and $_.Path -eq "/$SiteName" }
+                if ($apps) {
+                    Write-Warning "WARNING: Found application '$SiteName' under Default Web Site - this may cause conflicts"
+                } else {
+                    Write-Success "Confirmed: No conflicting application under Default Web Site"
+                }
+                Write-Host "======================================"
+                Write-Host ""
+            }
+        } catch {
+            Write-Warning "Failed to start IIS site: $($_.Exception.Message)"
         }
         
-        New-IISAppPool -Name $appPoolName
-        Set-IISAppPool -Name $appPoolName -ManagedRuntimeVersion ""  # No managed code needed for reverse proxy
-        Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processModel.identityType -Value ApplicationPoolIdentity
-        Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name applicationPool -Value $appPoolName
-        
-        Write-Success "IIS application pool configured"
-        
-        # Start the site
-        Start-IISSite -Name $SiteName
-        Write-Success "IIS site started"
+        # Configure application pool (moved after site creation and certificate binding)
+        Write-Host "Final application pool configuration..."
+        try {
+            # Ensure application pool is properly set
+            $currentPool = Get-ItemProperty -Path "IIS:\Sites\$SiteName" -Name applicationPool -ErrorAction SilentlyContinue
+            if ($currentPool -ne $appPoolName) {
+                Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name applicationPool -Value $appPoolName
+                Write-Host "Application pool association updated"
+            }
+            Write-Success "Application pool configuration verified"
+        } catch {
+            Write-Warning "Application pool verification had issues: $($_.Exception.Message)"
+        }
         
         # Configure Windows Firewall
         Write-Host "Configuring Windows Firewall..."
