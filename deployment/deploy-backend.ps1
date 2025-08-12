@@ -8,7 +8,7 @@ param(
 )
 
 # Import common functions
-. "$PSScriptRoot/scripts/common.ps1"
+. "$PSScriptRoot\scripts\common.ps1"
 
 $ServiceName = "ExcelAddin-Backend"
 $ServiceDisplayName = "ExcelAddin Backend Service"

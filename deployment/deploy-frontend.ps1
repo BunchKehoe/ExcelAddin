@@ -8,7 +8,7 @@ param(
 )
 
 # Import common functions
-. "$PSScriptRoot/scripts/common.ps1"
+. "$PSScriptRoot\scripts\common.ps1"
 
 $AppName = "exceladdin-frontend"
 $PM2Config = "$PSScriptRoot/config/pm2-frontend.json"

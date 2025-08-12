@@ -67,3 +67,6 @@ venv/
 ENV/
 env/
 .venv/
+
+# Service logs
+logs/
