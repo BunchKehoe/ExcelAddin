@@ -194,18 +194,18 @@ if ($ConfigureIIS) {
     }
     
     # Remove existing site
-    $existingSite = Get-IISSite -Name $SiteName -ErrorAction SilentlyContinue
+    $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
     if ($existingSite) {
         Write-Host "Removing existing IIS site..."
-        Remove-IISSite -Name $SiteName -Confirm:$false
+        Remove-Website -Name $SiteName
         Start-Sleep -Seconds 2
     }
     
     # Remove any conflicting applications under Default Web Site
-    $conflictingApp = Get-IISApp | Where-Object { $_.Path -eq "/$SiteName" -and $_.Site -eq "Default Web Site" }
+    $conflictingApp = Get-WebApplication -Site "Default Web Site" -Name $SiteName -ErrorAction SilentlyContinue
     if ($conflictingApp) {
         Write-Host "Removing conflicting application under Default Web Site..."
-        Remove-IISApp -SiteName "Default Web Site" -Name $SiteName -Confirm:$false
+        Remove-WebApplication -Site "Default Web Site" -Name $SiteName
     }
     
     # Create application directory
@@ -221,23 +221,25 @@ if ($ConfigureIIS) {
         Write-Host "Copied web.config"
     }
     
-    # Create standalone IIS site
+    # Create and configure application pool first
+    $appPoolName = "$SiteName-AppPool"
+    $existingAppPool = Get-WebAppPool -Name $appPoolName -ErrorAction SilentlyContinue
+    if ($existingAppPool) {
+        Write-Host "Removing existing application pool..."
+        Remove-WebAppPool -Name $appPoolName
+    }
+    
+    Write-Host "Creating application pool: $appPoolName"
+    New-WebAppPool -Name $appPoolName
+    Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
+    
+    # Create standalone IIS site with HTTPS binding
     Write-Host "Creating IIS site: $SiteName"
-    $site = New-IISSite -Name $SiteName -PhysicalPath $appPath -Port $Port -Protocol https
+    $site = New-Website -Name $SiteName -PhysicalPath $appPath -Port $Port -Protocol https -ApplicationPool $appPoolName
     if (-not $site) {
         Write-Error "Failed to create IIS site"
         exit 1
     }
-    
-    # Create and configure application pool
-    $appPoolName = "$SiteName-AppPool"
-    if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
-        Remove-IISAppPool -Name $appPoolName -Confirm:$false
-    }
-    
-    New-IISAppPool -Name $appPoolName
-    Set-IISAppPool -Name $appPoolName -ManagedRuntimeVersion ""
-    Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name applicationPool -Value $appPoolName
     
     Write-Success "IIS site created as standalone site"
     
@@ -270,9 +272,9 @@ if ($ConfigureIIS) {
         # Remove existing binding
         netsh http delete sslcert ipport=0.0.0.0:$Port 2>$null
         
-        # Add new binding
-        $bindCmd = "netsh http add sslcert ipport=0.0.0.0:$Port certhash=$certThumbprint appid='{12345678-1234-1234-1234-123456789abc}' certstorename=MY"
-        Invoke-Expression $bindCmd
+        # Add new binding using netsh
+        $guid = "{12345678-1234-1234-1234-123456789abc}"
+        netsh http add sslcert ipport=0.0.0.0:$Port certhash=$certThumbprint appid=$guid certstorename=MY
         
         if ($LASTEXITCODE -eq 0) {
             Write-Success "SSL certificate bound successfully"
@@ -284,7 +286,7 @@ if ($ConfigureIIS) {
     }
     
     # Start site
-    Start-IISSite -Name $SiteName
+    Start-Website -Name $SiteName
     Write-Success "IIS site started"
     
     Write-Host ""
