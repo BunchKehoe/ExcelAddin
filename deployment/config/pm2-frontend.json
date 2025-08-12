@@ -2,8 +2,8 @@
   "apps": [
     {
       "name": "exceladdin-frontend",
-      "script": "npx",
-      "args": ["serve", "-s", "dist", "-l", "3000"],
+      "script": "deployment/config/serve-frontend.js",
+      "args": [],
       "cwd": "../../",
       "instances": 1,
       "exec_mode": "fork",

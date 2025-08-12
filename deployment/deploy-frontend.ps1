@@ -42,16 +42,6 @@ try {
     }
     Write-Success "Dependencies installed successfully"
     
-    # Check if serve package is available globally
-    if (-not (Test-Command "serve")) {
-        Write-Host "Installing serve package globally..."
-        npm install -g serve
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to install serve package"
-            exit 1
-        }
-    }
-    
     # Build the frontend
     if (-not $SkipBuild) {
         Write-Header "Building Frontend Application"
