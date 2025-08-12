@@ -12,7 +12,20 @@ const url = require('url');
 // Configuration
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
-const PROJECT_ROOT = path.resolve(__dirname, '../..');
+
+// Determine project root - handle both direct execution and NSSM service contexts
+let PROJECT_ROOT;
+if (process.cwd().endsWith('deployment')) {
+  // Running from deployment directory
+  PROJECT_ROOT = path.resolve(process.cwd(), '..');
+} else if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+  // Already in project root (has dist folder)
+  PROJECT_ROOT = process.cwd();
+} else {
+  // Fallback - relative to this script
+  PROJECT_ROOT = path.resolve(__dirname, '../..');
+}
+
 const STATIC_DIR = path.join(PROJECT_ROOT, 'dist');
 
 // MIME types for common web files
@@ -121,10 +134,37 @@ function handleRequest(req, res) {
 }
 
 // Verify static directory exists
+console.log(`Looking for static directory: ${STATIC_DIR}`);
+console.log(`Current working directory: ${process.cwd()}`);
+console.log(`Script directory: ${__dirname}`);
+console.log(`Resolved project root: ${PROJECT_ROOT}`);
+
 if (!fs.existsSync(STATIC_DIR)) {
   console.error(`Static directory does not exist: ${STATIC_DIR}`);
   console.error('Please ensure the frontend has been built first (npm run build:staging)');
+  
+  // List contents of project root to help with debugging
+  console.error('Contents of project root:');
+  try {
+    const contents = fs.readdirSync(PROJECT_ROOT);
+    contents.forEach(item => {
+      const itemPath = path.join(PROJECT_ROOT, item);
+      const isDir = fs.statSync(itemPath).isDirectory();
+      console.error(`  ${isDir ? '[DIR]' : '[FILE]'} ${item}`);
+    });
+  } catch (err) {
+    console.error(`  Error listing contents: ${err.message}`);
+  }
+  
   process.exit(1);
+}
+
+console.log(`Static directory confirmed: ${STATIC_DIR}`);
+const indexPath = path.join(STATIC_DIR, 'index.html');
+if (fs.existsSync(indexPath)) {
+  console.log(`Index file confirmed: ${indexPath}`);
+} else {
+  console.error(`Warning: index.html not found at ${indexPath}`);
 }
 
 // Create HTTP server

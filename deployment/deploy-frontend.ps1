@@ -82,7 +82,7 @@ if (-not $SkipInstall) {
         Write-Success "Existing service removed"
     }
     
-    # Check for port conflicts
+    # Check for port conflicts and kill them
     Write-Host "Checking for port conflicts on 3000..."
     $portConflict = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
     if ($portConflict) {
@@ -105,6 +105,15 @@ if (-not $SkipInstall) {
         exit 1
     }
     
+    # Test server script syntax
+    Write-Host "Testing server script syntax..."
+    $syntaxTest = & node -c $FrontendServerScript 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Server script has syntax errors: $syntaxTest"
+        exit 1
+    }
+    Write-Success "Server script syntax OK"
+    
     # Install NSSM service
     Write-Host "Installing NSSM service..."
     nssm install $ServiceName $nodePath $FrontendServerScript
@@ -113,7 +122,7 @@ if (-not $SkipInstall) {
         exit 1
     }
     
-    # Configure service
+    # Configure service - use absolute paths for reliability
     nssm set $ServiceName DisplayName $ServiceDisplayName
     nssm set $ServiceName Description $ServiceDescription
     nssm set $ServiceName AppDirectory $FrontendPath
@@ -122,12 +131,14 @@ if (-not $SkipInstall) {
     nssm set $ServiceName AppRestartDelay 5000
     nssm set $ServiceName AppThrottle 5000
     
-    # Setup logging
+    # Setup logging directory
     $logDir = "C:\Logs\ExcelAddin"
     if (-not (Test-Path $logDir)) {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        Write-Host "Created log directory: $logDir"
     }
     
+    # Configure logging
     nssm set $ServiceName AppStdout "$logDir\frontend-stdout.log"
     nssm set $ServiceName AppStderr "$logDir\frontend-stderr.log"
     nssm set $ServiceName AppRotateFiles 1
@@ -135,48 +146,169 @@ if (-not $SkipInstall) {
     nssm set $ServiceName AppRotateSeconds 86400
     nssm set $ServiceName AppRotateBytes 10485760
     
-    # Set environment
-    nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=production PORT=3000 HOST=127.0.0.1"
+    # Set environment variables for service
+    nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=production;PORT=3000;HOST=127.0.0.1"
     
     Write-Success "NSSM service configured successfully"
+    
+    # Verify NSSM configuration
+    Write-Host ""
+    Write-Host "NSSM Configuration Verification:"
+    $nssmApp = & nssm get $ServiceName Application 2>&1
+    $nssmParams = & nssm get $ServiceName Parameters 2>&1
+    $nssmDir = & nssm get $ServiceName AppDirectory 2>&1
+    $nssmEnv = & nssm get $ServiceName AppEnvironmentExtra 2>&1
+    
+    Write-Host "  Application: $nssmApp"
+    Write-Host "  Parameters: $nssmParams"
+    Write-Host "  Directory: $nssmDir"
+    Write-Host "  Environment: $nssmEnv"
 }
 
 # Start service
 Write-Header "Starting Frontend Service"
+
+# Clear any existing log files for fresh start
+$logFiles = @(
+    "C:\Logs\ExcelAddin\frontend-stdout.log",
+    "C:\Logs\ExcelAddin\frontend-stderr.log"
+)
+foreach ($logFile in $logFiles) {
+    if (Test-Path $logFile) {
+        try {
+            Clear-Content $logFile -Force
+            Write-Host "Cleared log file: $logFile"
+        } catch {
+            Write-Warning "Could not clear log file: $logFile"
+        }
+    }
+}
+
+Write-Host "Starting service: $ServiceName"
 Start-Service -Name $ServiceName
+
+# Wait for service to start with better monitoring
+$startTimeout = 30
+$elapsed = 0
+$serviceStarted = $false
+
+Write-Host "Waiting for service to start..."
+while ($elapsed -lt $startTimeout -and -not $serviceStarted) {
+    Start-Sleep -Seconds 1
+    $elapsed++
+    
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq "Running") {
+        $serviceStarted = $true
+        Write-Success "Service started successfully (${elapsed}s)"
+    } else {
+        Write-Host "." -NoNewline
+    }
+}
+Write-Host ""
+
+if (-not $serviceStarted) {
+    Write-Error "Service failed to start within $startTimeout seconds"
+    
+    # Show any error logs
+    $errorLog = "C:\Logs\ExcelAddin\frontend-stderr.log"
+    if (Test-Path $errorLog) {
+        Write-Host "Error log contents:"
+        Get-Content $errorLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    }
+    exit 1
+}
+
+# Enhanced service testing
+Write-Header "Testing Service"
+
+Write-Host "Waiting for server to initialize..."
 Start-Sleep -Seconds 5
 
-$service = Get-Service -Name $ServiceName
-if ($service.Status -eq "Running") {
-    Write-Success "Frontend service started successfully"
+# Check if port is actually listening
+$maxPortTests = 10
+$portTestAttempts = 0
+$portListening = $false
+
+while ($portTestAttempts -lt $maxPortTests -and -not $portListening) {
+    $portTestAttempts++
+    Write-Host "Port test attempt $portTestAttempts/$maxPortTests..."
     
-    # Test service
-    Start-Sleep -Seconds 5
-    Write-Host "Testing service..."
-    $portTest = Test-NetConnection -ComputerName "127.0.0.1" -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue
+    $portTest = Test-NetConnection -ComputerName "127.0.0.1" -Port 3000 -InformationLevel Quiet -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     if ($portTest) {
-        Write-Success "Service is listening on port 3000"
-        
-        # Test HTTP response
-        try {
-            $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
-            Write-Success "HTTP test passed - Status: $($response.StatusCode)"
-        } catch {
-            Write-Warning "HTTP test failed: $($_.Exception.Message)"
-            
-            # Show logs for troubleshooting
-            $logFile = "C:\Logs\ExcelAddin\frontend-stderr.log"
-            if (Test-Path $logFile) {
-                Write-Host "Recent error logs:"
-                Get-Content $logFile -Tail 5 | ForEach-Object { Write-Host "  $_" }
-            }
-        }
+        Write-Success "Port 3000 is listening"
+        $portListening = $true
     } else {
-        Write-Warning "Service is running but not listening on port 3000"
+        Write-Host "Port 3000 not yet listening, waiting..."
+        Start-Sleep -Seconds 2
     }
-} else {
-    Write-Error "Frontend service failed to start"
+}
+
+if (-not $portListening) {
+    Write-Error "Service is running but not listening on port 3000"
+    
+    # Show logs for debugging
+    Write-Host "Service output logs:"
+    $stdoutLog = "C:\Logs\ExcelAddin\frontend-stdout.log"
+    if (Test-Path $stdoutLog) {
+        Write-Host "STDOUT:"
+        Get-Content $stdoutLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+    }
+    
+    $stderrLog = "C:\Logs\ExcelAddin\frontend-stderr.log"
+    if (Test-Path $stderrLog) {
+        Write-Host "STDERR:"
+        Get-Content $stderrLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    }
+    
+    Write-Host ""
+    Write-Host "Troubleshooting steps:"
+    Write-Host "1. Run diagnostics: .\diagnose-nssm.ps1"
+    Write-Host "2. Test manually: .\test-frontend-server.ps1"
+    Write-Host "3. Check logs: C:\Logs\ExcelAddin\frontend-*.log"
+    
     exit 1
+}
+
+# Test HTTP response
+Write-Host "Testing HTTP response..."
+$httpTestAttempts = 0
+$maxHttpTests = 5
+$httpSuccess = $false
+
+while ($httpTestAttempts -lt $maxHttpTests -and -not $httpSuccess) {
+    $httpTestAttempts++
+    try {
+        Write-Host "HTTP test attempt $httpTestAttempts/$maxHttpTests..."
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10 -ErrorAction Stop
+        Write-Success "HTTP test passed - Status: $($response.StatusCode)"
+        Write-Host "Response length: $($response.Content.Length) bytes"
+        
+        if ($response.Content -like "*<html*" -or $response.Content -like "*<!DOCTYPE*") {
+            Write-Success "Valid HTML content detected"
+            $httpSuccess = $true
+        } else {
+            Write-Warning "Response doesn't appear to be HTML"
+            Write-Host "First 200 characters: $($response.Content.Substring(0, [Math]::Min(200, $response.Content.Length)))"
+        }
+        
+    } catch {
+        Write-Warning "HTTP test $httpTestAttempts failed: $($_.Exception.Message)"
+        if ($httpTestAttempts -lt $maxHttpTests) {
+            Start-Sleep -Seconds 3
+        }
+    }
+}
+
+if (-not $httpSuccess) {
+    Write-Warning "HTTP tests failed - service may not be working correctly"
+    Write-Host ""
+    Write-Host "Troubleshooting steps:"
+    Write-Host "1. Check service logs: C:\Logs\ExcelAddin\frontend-*.log"
+    Write-Host "2. Run manual test: .\test-frontend-server.ps1"
+    Write-Host "3. Run diagnostics: .\diagnose-nssm.ps1"
+} else {
+    Write-Success "Service is working correctly"
 }
 
 # Configure IIS if requested
