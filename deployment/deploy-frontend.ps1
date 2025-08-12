@@ -1,21 +1,24 @@
 # ExcelAddin Frontend Deployment Script
-# Deploys React frontend as PM2 service
+# Deploys React frontend as NSSM service
 
 param(
     [switch]$Force,      # Kept for compatibility but not required for overwriting services
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$SkipInstall
 )
 
 # Import common functions
 . "$PSScriptRoot\scripts\common.ps1"
 
-$AppName = "exceladdin-frontend"
-$PM2Config = "$PSScriptRoot/config/pm2-frontend.json"
+$ServiceName = "ExcelAddin-Frontend"
+$ServiceDisplayName = "ExcelAddin Frontend Service"
+$ServiceDescription = "Excel Add-in Frontend Web Server"
+$FrontendServerScript = "$PSScriptRoot/config/frontend-server.js"
 
 Write-Header "ExcelAddin Frontend Deployment"
 
 # Check prerequisites
-if (-not (Test-Prerequisites -SkipNSSM)) {
+if (-not (Test-Prerequisites -SkipPM2)) {
     Write-Error "Prerequisites check failed. Please resolve issues before continuing."
     exit 1
 }
@@ -71,14 +74,15 @@ try {
     # Test the built frontend
     Write-Header "Testing Frontend Build"
     
-    # Start serve in background to test
-    Write-Host "Testing frontend build..."
-    $testProcess = Start-Process -FilePath "npx" -ArgumentList "serve", "-s", "dist", "-l", "3001" -PassThru -NoNewWindow
+    # Test using our new frontend server
+    Write-Host "Testing frontend build with new server..."
+    $nodeCmd = Get-Command node -ErrorAction Stop
+    $testProcess = Start-Process -FilePath $nodeCmd.Source -ArgumentList $FrontendServerScript -PassThru -NoNewWindow -WorkingDirectory $FrontendPath
     Start-Sleep -Seconds 5
     
     if ($testProcess -and -not $testProcess.HasExited) {
         try {
-            $response = Invoke-WebRequest -Uri "http://127.0.0.1:3001" -TimeoutSec 10
+            $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
             Write-Success "Frontend test passed - HTTP Status: $($response.StatusCode)"
         } catch {
             Write-Warning "Frontend test failed, but continuing: $($_.Exception.Message)"
@@ -89,92 +93,123 @@ try {
         Start-Sleep -Seconds 2
     }
     
-    # Configure PM2 application
-    Write-Header "Configuring PM2 Service"
-    
-    # Check if application already exists (remove by default)
-    $existingApp = pm2 list | Where-Object { $_ -match $AppName }
-    if ($existingApp) {
-        Write-Host "Existing PM2 application detected. Stopping and removing: $AppName"
-        pm2 stop $AppName 2>$null
-        pm2 delete $AppName 2>$null
-        Start-Sleep -Seconds 2
-        Write-Success "Existing PM2 application removed successfully"
-    }
-    
-    # Create logs directory
-    $logsDir = Join-Path $FrontendPath "logs"
-    if (-not (Test-Path $logsDir)) {
-        New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
-        Write-Host "Created logs directory: $logsDir"
-    }
-    
-    # Start PM2 application
-    Write-Host "Starting PM2 application from config: $PM2Config"
-    pm2 start $PM2Config
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to start PM2 application"
-        exit 1
-    }
-    
-    # Save PM2 configuration
-    pm2 save
-    
-    # Verify application is running
-    Start-Sleep -Seconds 5
-    $appStatus = pm2 jlist | ConvertFrom-Json | Where-Object { $_.name -eq $AppName }
-    
-    if ($appStatus -and $appStatus.pm2_env.status -eq "online") {
-        Write-Success "PM2 application started successfully"
+    # Configure NSSM service
+    if (-not $SkipInstall) {
+        Write-Header "Configuring NSSM Service"
         
-        # Test if frontend is responding
-        try {
-            Start-Sleep -Seconds 3
-            $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 15
-            Write-Success "Frontend service is responding - HTTP Status: $($response.StatusCode)"
-        } catch {
-            Write-Warning "Frontend service started but not responding to HTTP requests: $($_.Exception.Message)"
+        # Remove existing service if it exists (always overwrite by default)
+        $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($existingService) {
+            Write-Host "Existing service detected. Stopping and removing service: $ServiceName"
+            Stop-ServiceSafely -ServiceName $ServiceName
+            nssm remove $ServiceName confirm
+            Start-Sleep -Seconds 2
+            Write-Success "Existing service removed successfully"
         }
-    } else {
-        Write-Error "Frontend service failed to start"
-        pm2 logs $AppName --lines 20
-        exit 1
+        
+        # Install NSSM service
+        Write-Host "Installing NSSM service..."
+        
+        # Get Node.js executable path
+        try {
+            $nodeCmd = Get-Command node -ErrorAction Stop
+            $nodePath = $nodeCmd.Source
+            Write-Host "Using Node.js executable: $nodePath"
+        } catch {
+            Write-Error "Node.js executable not found in PATH. Please ensure Node.js is installed and accessible."
+            exit 1
+        }
+        
+        # Verify Node.js executable works
+        try {
+            $nodeVersion = & $nodePath --version 2>&1
+            Write-Host "Node.js version: $nodeVersion"
+        } catch {
+            Write-Error "Node.js executable is not working properly: $($_.Exception.Message)"
+            exit 1
+        }
+        
+        # Verify frontend server script exists
+        if (-not (Test-Path $FrontendServerScript)) {
+            Write-Error "Frontend server script not found: $FrontendServerScript"
+            exit 1
+        }
+        Write-Host "Using frontend server script: $FrontendServerScript"
+        
+        nssm install $ServiceName $nodePath $FrontendServerScript
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to install NSSM service"
+            exit 1
+        }
+        
+        # Configure service parameters
+        nssm set $ServiceName DisplayName $ServiceDisplayName
+        nssm set $ServiceName Description $ServiceDescription
+        nssm set $ServiceName AppDirectory $FrontendPath
+        nssm set $ServiceName Start SERVICE_AUTO_START
+        
+        # Configure logging
+        $logDir = "C:\Logs\ExcelAddin"
+        if (-not (Test-Path $logDir)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+        
+        nssm set $ServiceName AppStdout "$logDir\frontend-stdout.log"
+        nssm set $ServiceName AppStderr "$logDir\frontend-stderr.log"
+        nssm set $ServiceName AppRotateFiles 1
+        nssm set $ServiceName AppRotateOnline 1
+        nssm set $ServiceName AppRotateSeconds 86400
+        nssm set $ServiceName AppRotateBytes 10485760
+        
+        # Set environment variables
+        nssm set $ServiceName AppEnvironmentExtra NODE_ENV=production PORT=3000 HOST=127.0.0.1
+        
+        Write-Success "NSSM service configured successfully"
     }
-    
-    # Configure PM2 startup (Windows service)
-    Write-Header "Configuring PM2 Startup"
+    # Start the service
+    Write-Header "Starting Frontend Service"
     
     try {
-        # Generate startup script
-        $startupResult = pm2 startup
-        Write-Host $startupResult
+        Start-Service -Name $ServiceName
+        Start-Sleep -Seconds 5
         
-        # Save current PM2 configuration
-        pm2 save
-        
-        Write-Success "PM2 startup configuration completed"
-        Write-Host "Note: PM2 startup may require additional manual configuration on Windows"
-        
+        $service = Get-Service -Name $ServiceName
+        if ($service.Status -eq "Running") {
+            Write-Success "Frontend service started successfully"
+            
+            # Verify service is responding
+            Start-Sleep -Seconds 5
+            try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 10
+                Write-Success "Frontend service is responding - HTTP Status: $($response.StatusCode)"
+            } catch {
+                Write-Warning "Frontend service is running but not responding to HTTP requests"
+            }
+        } else {
+            Write-Error "Frontend service failed to start"
+            exit 1
+        }
     } catch {
-        Write-Warning "PM2 startup configuration failed: $($_.Exception.Message)"
-        Write-Host "You may need to configure PM2 to start on system boot manually"
+        Write-Error "Failed to start frontend service: $($_.Exception.Message)"
+        exit 1
     }
     
     Write-Header "Frontend Deployment Complete"
     Write-Success "ExcelAddin Frontend has been deployed successfully"
     Write-Host ""
-    Write-Host "Application Information:"
-    Write-Host "  Name: $AppName"
-    Write-Host "  Status: Online"
+    Write-Host "Service Information:"
+    Write-Host "  Name: $ServiceName"
+    Write-Host "  Display Name: $ServiceDisplayName"
+    Write-Host "  Status: Running"
     Write-Host "  URL: http://127.0.0.1:3000"
-    Write-Host "  Logs: pm2 logs $AppName"
     Write-Host ""
-    Write-Host "PM2 Management Commands:"
-    Write-Host "  Status: pm2 status"
-    Write-Host "  Restart: pm2 restart $AppName"
-    Write-Host "  Stop: pm2 stop $AppName"
-    Write-Host "  Logs: pm2 logs $AppName"
+    Write-Host "Service Management Commands:"
+    Write-Host "  Status: Get-Service -Name '$ServiceName'"
+    Write-Host "  Start: Start-Service -Name '$ServiceName'"
+    Write-Host "  Stop: Stop-Service -Name '$ServiceName'"
+    Write-Host "  Restart: Restart-Service -Name '$ServiceName'"
+    Write-Host "  Logs: Check C:\Logs\ExcelAddin\frontend-*.log"
     Write-Host ""
 
 } catch {

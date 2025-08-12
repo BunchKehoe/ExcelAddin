@@ -54,22 +54,15 @@ try {
         Add-TestResult -TestName "Backend Service Running" -Passed $false -Message "Service not found"
     }
     
-    # Test Frontend PM2 Service
+    # Test Frontend NSSM Service
     Write-Host "Testing frontend service status..."
-    try {
-        $pm2List = pm2 jlist | ConvertFrom-Json
-        $frontendApp = $pm2List | Where-Object { $_.name -eq "exceladdin-frontend" }
-        
-        if ($frontendApp) {
-            Add-TestResult -TestName "Frontend Service Exists" -Passed $true -Message "PM2 app found"
-            Add-TestResult -TestName "Frontend Service Running" -Passed ($frontendApp.pm2_env.status -eq "online") -Message "Status: $($frontendApp.pm2_env.status)"
-        } else {
-            Add-TestResult -TestName "Frontend Service Exists" -Passed $false -Message "PM2 app not found"
-            Add-TestResult -TestName "Frontend Service Running" -Passed $false -Message "PM2 app not found"
-        }
-    } catch {
-        Add-TestResult -TestName "Frontend Service Exists" -Passed $false -Message "PM2 check failed" -Details $_.Exception.Message
-        Add-TestResult -TestName "Frontend Service Running" -Passed $false -Message "PM2 check failed"
+    $frontendService = Get-Service -Name "ExcelAddin-Frontend" -ErrorAction SilentlyContinue
+    if ($frontendService) {
+        Add-TestResult -TestName "Frontend Service Exists" -Passed $true -Message "Service found"
+        Add-TestResult -TestName "Frontend Service Running" -Passed ($frontendService.Status -eq "Running") -Message "Status: $($frontendService.Status)"
+    } else {
+        Add-TestResult -TestName "Frontend Service Exists" -Passed $false -Message "Service not found"
+        Add-TestResult -TestName "Frontend Service Running" -Passed $false -Message "Service not found"
     }
     
     # Test IIS Site

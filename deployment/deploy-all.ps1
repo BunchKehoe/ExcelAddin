@@ -16,7 +16,7 @@ $CertificateThumbprint = ""  # Will be determined automatically
 Write-Header "ExcelAddin Complete Deployment"
 Write-Host "This script will deploy all ExcelAddin services:"
 Write-Host "- Backend (Python Flask via NSSM)"
-Write-Host "- Frontend (React via PM2)"
+Write-Host "- Frontend (React via NSSM)"
 Write-Host "- IIS Reverse Proxy (HTTPS on port $Port)"
 Write-Host ""
 
@@ -25,6 +25,22 @@ if (-not (Test-Prerequisites)) {
     Write-Error "Prerequisites check failed. Please resolve issues before continuing."
     exit 1
 }
+
+try {
+    # Clean up any existing PM2 configurations
+    Write-Header "Step 0: Clean up PM2 (if present)"
+    
+    $cleanupScript = "$PSScriptRoot\scripts\cleanup-pm2.ps1"
+    if (Test-Path $cleanupScript) {
+        try {
+            & $cleanupScript -Force
+            Write-Success "PM2 cleanup completed"
+        } catch {
+            Write-Warning "PM2 cleanup had issues, but continuing: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Host "PM2 cleanup script not found, skipping..."
+    }
 
 try {
     # Deploy Backend Service

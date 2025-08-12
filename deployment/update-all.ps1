@@ -76,10 +76,10 @@ try {
         exit 1
     }
     
-    # Restart PM2 application
+    # Restart NSSM service
     Write-Host "Restarting frontend service..."
     try {
-        pm2 restart exceladdin-frontend
+        Restart-Service -Name "ExcelAddin-Frontend" -Force
         Start-Sleep -Seconds 10
         
         # Verify frontend is responding
@@ -117,11 +117,11 @@ try {
         Write-Warning "Backend service status: $($backendService.Status)"
     }
     
-    $pm2Status = pm2 jlist | ConvertFrom-Json | Where-Object { $_.name -eq "exceladdin-frontend" }
-    if ($pm2Status -and $pm2Status.pm2_env.status -eq "online") {
-        Write-Success "Frontend service: Online"
+    $frontendService = Get-Service -Name "ExcelAddin-Frontend" -ErrorAction SilentlyContinue
+    if ($frontendService -and $frontendService.Status -eq "Running") {
+        Write-Success "Frontend service: Running"
     } else {
-        Write-Warning "Frontend service is not online"
+        Write-Warning "Frontend service is not running"
     }
     
     $site = Get-IISSite -Name "ExcelAddin" -ErrorAction SilentlyContinue
