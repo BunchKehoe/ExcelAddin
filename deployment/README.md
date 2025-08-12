@@ -46,6 +46,8 @@ Updates services without reinstalling or reconfiguring infrastructure.
 .\deploy-frontend.ps1  # Deploy React frontend via PM2
 ```
 
+**Note**: Both individual deployment scripts automatically stop and overwrite existing services without requiring the `-Force` flag. This makes re-deployments seamless.
+
 ### Testing
 ```powershell
 .\test-deployment.ps1

@@ -2,7 +2,7 @@
 # Deploys React frontend as PM2 service
 
 param(
-    [switch]$Force,
+    [switch]$Force,      # Kept for compatibility but not required for overwriting services
     [switch]$SkipBuild
 )
 
@@ -102,18 +102,14 @@ try {
     # Configure PM2 application
     Write-Header "Configuring PM2 Service"
     
-    # Check if application already exists
+    # Check if application already exists (remove by default)
     $existingApp = pm2 list | Where-Object { $_ -match $AppName }
     if ($existingApp) {
-        if ($Force) {
-            Write-Host "Stopping existing PM2 application..."
-            pm2 stop $AppName
-            pm2 delete $AppName
-            Start-Sleep -Seconds 2
-        } else {
-            Write-Error "PM2 application $AppName already exists. Use -Force to overwrite."
-            exit 1
-        }
+        Write-Host "Existing PM2 application detected. Stopping and removing: $AppName"
+        pm2 stop $AppName 2>$null
+        pm2 delete $AppName 2>$null
+        Start-Sleep -Seconds 2
+        Write-Success "Existing PM2 application removed successfully"
     }
     
     # Create logs directory

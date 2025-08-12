@@ -2,7 +2,7 @@
 # Deploys Python Flask backend as NSSM service
 
 param(
-    [switch]$Force,
+    [switch]$Force,      # Kept for compatibility but not required for overwriting services
     [switch]$SkipInstall
 )
 
@@ -112,18 +112,14 @@ try {
     if (-not $SkipInstall) {
         Write-Header "Configuring NSSM Service"
         
-        # Remove existing service if it exists
+        # Remove existing service if it exists (always overwrite by default)
         $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
         if ($existingService) {
-            if ($Force) {
-                Write-Host "Removing existing service..."
-                Stop-ServiceSafely -ServiceName $ServiceName
-                nssm remove $ServiceName confirm
-                Start-Sleep -Seconds 2
-            } else {
-                Write-Error "Service $ServiceName already exists. Use -Force to overwrite."
-                exit 1
-            }
+            Write-Host "Existing service detected. Stopping and removing service: $ServiceName"
+            Stop-ServiceSafely -ServiceName $ServiceName
+            nssm remove $ServiceName confirm
+            Start-Sleep -Seconds 2
+            Write-Success "Existing service removed successfully"
         }
         
         # Install NSSM service
