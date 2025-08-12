@@ -71,8 +71,8 @@ Runs comprehensive tests to verify all services are running and accessible.
 - **Environment**: staging
 - **Health Check**: http://localhost:5000/api/health
 
-### Frontend Service (PM2)
-- **Application Name**: exceladdin-frontend
+### Frontend Service (NSSM)
+- **Service Name**: ExcelAddin-Frontend  
 - **Port**: 3000
 - **Health Check**: http://localhost:3000
 
@@ -86,26 +86,45 @@ Runs comprehensive tests to verify all services are running and accessible.
 
 ### Service Status Check
 ```powershell
-# Check NSSM service
-nssm status ExcelAddin-Backend
-
-# Check PM2 service
-pm2 status exceladdin-frontend
+# Check NSSM services
+Get-Service -Name ExcelAddin-Backend
+Get-Service -Name ExcelAddin-Frontend
 
 # Check IIS site
 Get-IISSite -Name ExcelAddin
 ```
 
+### Port Conflict Resolution
+If the frontend service fails to start due to port conflicts:
+
+```powershell
+# Automatically resolve port conflicts (with confirmation)
+.\scripts\kill-port-3000.ps1
+
+# Force kill without confirmation  
+.\scripts\kill-port-3000.ps1 -Force
+```
+
+The deployment scripts automatically detect and resolve port conflicts, but you can use the above script for manual resolution.
+
 ### Log Locations
-- **Backend Logs**: Check NSSM service logs
-- **Frontend Logs**: `pm2 logs exceladdin-frontend`
+- **Backend Logs**: C:\Logs\ExcelAddin\backend-stdout.log, C:\Logs\ExcelAddin\backend-stderr.log
+- **Frontend Logs**: C:\Logs\ExcelAddin\frontend-stdout.log, C:\Logs\ExcelAddin\frontend-stderr.log
 - **IIS Logs**: Default IIS log location
 
 ### Common Issues
-1. **Port Conflicts**: Ensure ports 3000 and 5000 are available
-2. **SSL Certificate**: Verify certificate is properly configured in IIS
-3. **Firewall**: Ensure Windows Firewall allows traffic on port 9443
-4. **Service Dependencies**: Backend and Frontend must be running before IIS can proxy requests
+1. **Port Conflicts**: Use `.\scripts\kill-port-3000.ps1` to resolve port 3000 conflicts
+2. **404 Errors**: Ensure `dist` directory exists and contains `index.html` (run `npm run build:staging`)
+3. **SSL Certificate**: Verify certificate is properly configured in IIS
+4. **Firewall**: Ensure Windows Firewall allows traffic on port 9443
+5. **Service Dependencies**: Backend and Frontend must be running before IIS can proxy requests
+
+### Enhanced Diagnostics
+The deployment scripts now provide detailed diagnostics for common issues:
+- Automatic port conflict detection and resolution
+- Static file directory validation
+- Service log analysis for startup failures
+- HTTP response testing with detailed error reporting
 
 ## Files Overview
 

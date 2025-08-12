@@ -177,7 +177,7 @@ try {
         
         Write-Success "NSSM service configured successfully"
         
-        # Check for port conflicts before starting
+        # Check for and resolve port conflicts before starting
         Write-Host "Checking for port conflicts..."
         try {
             $portConflict = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
@@ -186,8 +186,32 @@ try {
                 $conflictProcess = Get-Process -Id $portConflict.OwningProcess -ErrorAction SilentlyContinue
                 if ($conflictProcess) {
                     Write-Warning "Conflicting process: $($conflictProcess.ProcessName) (PID: $($conflictProcess.Id))"
+                    
+                    # Don't kill system processes (PID 0, 4) or critical Windows processes
+                    if ($conflictProcess.Id -gt 4 -and $conflictProcess.ProcessName -notin @("System", "Idle", "svchost", "winlogon", "csrss")) {
+                        Write-Host "Attempting to stop conflicting process..."
+                        try {
+                            Stop-Process -Id $conflictProcess.Id -Force -ErrorAction Stop
+                            Write-Success "Successfully stopped process $($conflictProcess.ProcessName) (PID: $($conflictProcess.Id))"
+                            Start-Sleep -Seconds 2
+                            
+                            # Verify port is now free
+                            $portConflictAfter = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+                            if (-not $portConflictAfter) {
+                                Write-Success "Port 3000 is now available"
+                            } else {
+                                Write-Warning "Port 3000 is still in use after stopping the process"
+                            }
+                        } catch {
+                            Write-Warning "Failed to stop conflicting process: $($_.Exception.Message)"
+                            Write-Host "The service may fail to start due to this port conflict."
+                        }
+                    } else {
+                        Write-Warning "Cannot stop system/critical process. The service may fail to start due to this port conflict."
+                    }
+                } else {
+                    Write-Warning "Could not identify the conflicting process"
                 }
-                Write-Host "The service may fail to start due to this port conflict."
             } else {
                 Write-Success "Port 3000 is available"
             }
@@ -226,12 +250,52 @@ try {
                         Write-Warning "Port is listening but HTTP request failed: $($_.Exception.Message)"
                         Write-Host "This may indicate a server configuration issue."
                         
+                        # Additional diagnostics for 404 errors
+                        if ($_.Exception.Message -like "*404*") {
+                            Write-Host ""
+                            Write-Host "404 Error Diagnostics:"
+                            
+                            # Check dist directory
+                            $distPath = Join-Path $ProjectRoot "dist"
+                            Write-Host "Checking static file directory: $distPath"
+                            if (Test-Path $distPath) {
+                                $distFiles = Get-ChildItem $distPath -Recurse | Where-Object { -not $_.PSIsContainer } | Measure-Object
+                                Write-Host "  Directory exists with $($distFiles.Count) files"
+                                
+                                # Check for key files
+                                $indexPath = Join-Path $distPath "index.html"
+                                if (Test-Path $indexPath) {
+                                    Write-Host "  ✓ index.html found"
+                                } else {
+                                    Write-Warning "  ✗ index.html missing - this will cause 404 errors"
+                                }
+                                
+                                # Show some files in dist
+                                $sampleFiles = Get-ChildItem $distPath -File | Select-Object -First 5
+                                if ($sampleFiles) {
+                                    Write-Host "  Sample files in dist:"
+                                    $sampleFiles | ForEach-Object { Write-Host "    - $($_.Name)" }
+                                }
+                            } else {
+                                Write-Warning "  ✗ Static directory missing: $distPath"
+                                Write-Host "    Run 'npm run build:staging' to create the dist directory"
+                            }
+                        }
+                        
                         # Show recent service logs if available
                         $logFile = "C:\Logs\ExcelAddin\frontend-stderr.log"
                         if (Test-Path $logFile) {
                             Write-Host ""
                             Write-Host "Recent error logs:"
                             Get-Content $logFile -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                        }
+                        
+                        # Show stdout logs too for additional context
+                        $stdoutLogFile = "C:\Logs\ExcelAddin\frontend-stdout.log"
+                        if (Test-Path $stdoutLogFile) {
+                            Write-Host ""
+                            Write-Host "Recent service output:"
+                            Get-Content $stdoutLogFile -Tail 15 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
                         }
                     }
                 } else {
