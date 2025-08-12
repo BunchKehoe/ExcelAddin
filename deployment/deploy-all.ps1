@@ -1,4 +1,3 @@
-#!/usr/bin/env powershell
 # ExcelAddin Complete Deployment Script
 # Performs initial deployment of all services
 

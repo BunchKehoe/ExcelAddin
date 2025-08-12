@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 NSSM service wrapper for ExcelAddin backend.
 This script ensures proper service startup and environment configuration.

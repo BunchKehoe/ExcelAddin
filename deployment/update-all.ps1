@@ -1,4 +1,3 @@
-#!/usr/bin/env powershell
 # ExcelAddin Update Deployment Script
 # Updates existing services without full reconfiguration
 

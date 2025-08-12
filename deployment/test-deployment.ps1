@@ -1,4 +1,3 @@
-#!/usr/bin/env powershell
 # ExcelAddin Deployment Testing Script
 # Comprehensive tests for all deployed services
 

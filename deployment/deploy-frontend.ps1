@@ -1,4 +1,3 @@
-#!/usr/bin/env powershell
 # ExcelAddin Frontend Deployment Script
 # Deploys React frontend as PM2 service
 

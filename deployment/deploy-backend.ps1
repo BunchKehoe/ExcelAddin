@@ -1,4 +1,3 @@
-#!/usr/bin/env powershell
 # ExcelAddin Backend Deployment Script
 # Deploys Python Flask backend as NSSM service
 
@@ -25,7 +24,7 @@ if (-not (Test-Prerequisites -SkipPM2)) {
 # Get paths
 $ProjectRoot = Get-ProjectRoot
 $BackendPath = Get-BackendPath
-$ServiceScript = Join-Path $PSScriptRoot "config/backend-service.py"
+$ServiceScript = Join-Path $BackendPath "run.py"
 
 Write-Host "Project Root: $ProjectRoot"
 Write-Host "Backend Path: $BackendPath"
@@ -129,7 +128,33 @@ try {
         
         # Install NSSM service
         Write-Host "Installing NSSM service..."
-        $pythonPath = (Get-Command python).Source
+        
+        # Get Python executable path with better error handling
+        try {
+            $pythonCmd = Get-Command python -ErrorAction Stop
+            $pythonPath = $pythonCmd.Source
+            Write-Host "Using Python executable: $pythonPath"
+        } catch {
+            Write-Error "Python executable not found in PATH. Please ensure Python is installed and accessible."
+            exit 1
+        }
+        
+        # Verify Python executable works
+        try {
+            $pythonVersion = & $pythonPath --version 2>&1
+            Write-Host "Python version: $pythonVersion"
+        } catch {
+            Write-Error "Python executable is not working properly: $($_.Exception.Message)"
+            exit 1
+        }
+        
+        # Verify service script exists
+        if (-not (Test-Path $ServiceScript)) {
+            Write-Error "Service script not found: $ServiceScript"
+            exit 1
+        }
+        Write-Host "Using service script: $ServiceScript"
+        
         nssm install $ServiceName $pythonPath $ServiceScript
         
         if ($LASTEXITCODE -ne 0) {
