@@ -38,4 +38,3 @@ if (Test-Path $newScriptPath) {
     Write-Error "New script not found at: $newScriptPath"
     Write-Host "Please run: .\deployment\scripts\setup-backend-iis.ps1" -ForegroundColor Yellow
 }
-exit

@@ -59,7 +59,7 @@ function getEnvironmentConfig(): EnvironmentConfig {
       
     case 'staging':
       return {
-        apiBaseUrl: 'https://server-vs81t.intranet.local:9443/excellence/api',
+        apiBaseUrl: 'https://server-vs81t.intranet.local:9443/excellence/backend/api',
         environment: 'staging',
         manifestUrl: 'https://server-vs81t.intranet.local:9443/excellence/manifest.xml',
         assetBaseUrl: 'https://server-vs81t.intranet.local:9443/excellence/assets'
@@ -67,7 +67,7 @@ function getEnvironmentConfig(): EnvironmentConfig {
       
     case 'production':
       return {
-        apiBaseUrl: 'https://server-vs84.intranet.local:9443/excellence/api',
+        apiBaseUrl: 'https://server-vs84.intranet.local:9443/excellence/backend/api',
         environment: 'production',
         manifestUrl: 'https://server-vs84.intranet.local:9443/excellence/manifest.xml',
         assetBaseUrl: 'https://server-vs84.intranet.local:9443/excellence/assets'

@@ -122,6 +122,21 @@ try {
         Write-Warning "   web.config not found at: $webConfigSource"
     }
     
+    # Step 3.2: Deploy and configure backend
+    Write-Host "   Setting up backend with IIS..." -ForegroundColor Yellow
+    $backendSetupScript = Join-Path $PSScriptRoot "setup-backend-iis.ps1"
+    if (Test-Path $backendSetupScript) {
+        try {
+            & $backendSetupScript -SiteName $SiteName -Force
+            Write-Host "   [OK] Backend configured with IIS FastCGI" -ForegroundColor Green
+        } catch {
+            Write-Warning "   Backend setup failed: $($_.Exception.Message)"
+            Write-Host "   You may need to run setup-backend-iis.ps1 manually" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Warning "   Backend setup script not found: $backendSetupScript"
+    }
+
     # Check for key files
     $keyFiles = @("taskpane.html", "commands.html")
     foreach ($file in $keyFiles) {
@@ -132,8 +147,6 @@ try {
             Write-Warning "   [WARNING] $file not found in deployment"
         }
     }
-
-    # Step 4: Set proper permissions
     Write-Host "4. Setting directory permissions..." -ForegroundColor Cyan
     
     try {
@@ -163,19 +176,26 @@ try {
     Write-Host "`nDeployment completed successfully!" -ForegroundColor Green -BackgroundColor DarkGreen
     Write-Host "Website URL: https://server-vs81t.intranet.local:9443/excellence/" -ForegroundColor Cyan
     Write-Host "Taskpane: https://server-vs81t.intranet.local:9443/excellence/taskpane.html" -ForegroundColor Cyan
+    Write-Host "Backend API: https://server-vs81t.intranet.local:9443/excellence/api/health" -ForegroundColor Cyan
     Write-Host "Health check: https://server-vs81t.intranet.local:9443/health" -ForegroundColor Cyan
     
+    Write-Host "`nArchitecture:" -ForegroundColor Yellow
+    Write-Host "• Frontend and Backend both served by IIS" -ForegroundColor White
+    Write-Host "• API calls: /excellence/api/* → /excellence/backend/api/*" -ForegroundColor White
+    Write-Host "• No separate Flask service needed" -ForegroundColor White
+    
     Write-Host "`nNext steps:" -ForegroundColor Yellow
-    Write-Host "1. Start Flask backend: cd backend && python app.py" -ForegroundColor White
-    Write-Host "2. Test the deployment: .\deployment\scripts\test-iis-simple.ps1" -ForegroundColor White
-    Write-Host "3. Load the add-in in Excel using the manifest file" -ForegroundColor White
+    Write-Host "1. Test the deployment: .\deployment\scripts\test-iis-simple.ps1" -ForegroundColor White
+    Write-Host "2. Load the add-in in Excel using the manifest file" -ForegroundColor White
+    Write-Host "3. Check IIS Manager for both frontend and backend applications" -ForegroundColor White
 
 } catch {
     Write-Error "Deployment failed: $($_.Exception.Message)"
     Write-Host "`nTroubleshooting tips:" -ForegroundColor Yellow
     Write-Host "1. Ensure you have Administrator privileges" -ForegroundColor White
     Write-Host "2. Check that IIS is properly configured with deploy-to-existing-iis.ps1" -ForegroundColor White
-    Write-Host "3. Verify Node.js and npm are installed and working" -ForegroundColor White
+    Write-Host "3. Verify Node.js, npm, and Python are installed and working" -ForegroundColor White
     Write-Host "4. Check that all project files are present" -ForegroundColor White
+    Write-Host "5. Check IIS logs and backend application in IIS Manager" -ForegroundColor White
     exit 1
 }

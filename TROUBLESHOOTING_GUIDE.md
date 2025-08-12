@@ -4,7 +4,7 @@
 1. [Troubleshooting Tools and Scripts](#troubleshooting-tools-and-scripts)
 2. [Common Issues and Solutions](#common-issues-and-solutions)  
 3. [Service-Specific Troubleshooting](#service-specific-troubleshooting)
-4. [nginx Issues](#nginx-issues)
+4. [IIS Backend Issues](#iis-backend-issues)
 5. [Backend Service Issues](#backend-service-issues)
 6. [Excel Add-in Issues](#excel-add-in-issues)
 7. [SSL Certificate Issues](#ssl-certificate-issues)
@@ -18,18 +18,18 @@
 | Script | When to Use | Purpose |
 |--------|-------------|---------|
 | `diagnose-backend-service.ps1` | Backend service won't start or crashes | Comprehensive backend service diagnostics and automatic fixes |
-| `validate-nginx-config.ps1` | nginx fails to start or configuration errors | Tests nginx configuration syntax and common issues |
-| `handle-encrypted-key.ps1` | nginx prompts for SSL key passwords | Converts encrypted SSL keys to unencrypted format |
+| `setup-backend-iis.ps1` | Setting up backend in IIS | Configures IIS FastCGI for Python backend hosting |  
+| `handle-encrypted-key.ps1` | SSL key passwords required | Converts encrypted SSL keys to unencrypted format |
 | `extract-pfx.ps1` | Using PFX certificate files | Extracts certificate and key from PFX files |
 
 ### Usage Examples
 
 ```powershell
-# Diagnose backend service issues
+# Diagnose backend service issues  
 .\deployment\scripts\diagnose-backend-service.ps1 -FixCommonIssues
 
-# Validate nginx configuration  
-.\deployment\scripts\validate-nginx-config.ps1
+# Setup backend in IIS
+.\deployment\scripts\setup-backend-iis.ps1
 
 # Fix SSL key password prompts
 .\deployment\scripts\handle-encrypted-key.ps1 -KeyPath "C:\Cert\server.key"
@@ -40,7 +40,18 @@
 
 ## Common Issues and Solutions
 
-### 1. "Service won't start" (No error messages)
+### 1. Certificate Errors in Excel Add-in
+
+**Symptoms**: Excel shows "The content is blocked because it isn't signed by a valid security certificate"
+
+**Quick Fix**:
+```bash
+npm run cert:install
+```
+
+**Detailed Solution**: See [CERTIFICATE_GUIDE.md](CERTIFICATE_GUIDE.md) for comprehensive certificate management instructions.
+
+### 2. "Service won't start" (No error messages)
 
 **Symptoms**: Service fails to start with no logs or error messages
 
@@ -49,48 +60,52 @@
 # Run comprehensive diagnostics
 .\deployment\scripts\diagnose-backend-service.ps1 -FixCommonIssues
 
-# Check NSSM configuration
-nssm dump ExcelAddinBackend
+# Check IIS Application Configuration
+Get-WebApplication -Name "backend" -Site "Default Web Site"
 ```
 
 **Common Causes & Solutions**:
-- **Wrong Python path**: NSSM using "python" instead of full path
+- **Wrong Python path**: IIS FastCGI using incorrect Python executable
   ```powershell
-  # Fix: Update NSSM with correct Python path
-  nssm set ExcelAddinBackend Application "C:\Python39\python.exe"
+  # Fix: Update web.config with correct Python path
+  # Edit backend/web.config and update the FastCGI application path
   ```
 - **Missing dependencies**: Python packages not installed
   ```powershell
   cd C:\inetpub\wwwroot\ExcelAddin\backend
   poetry install
   ```
-- **Wrong working directory**: Service can't find required files
+- **WSGI application errors**: Check IIS logs and application event viewer
   ```powershell
-  nssm set ExcelAddinBackend AppDirectory "C:\inetpub\wwwroot\ExcelAddin\backend"
+  # Check IIS logs
+  Get-ChildItem "C:\inetpub\logs\LogFiles\W3SVC1" | Sort-Object LastWriteTime -Descending | Select-Object -First 5
   ```
 
-### 2. "nginx process closes immediately"
+### 2. "IIS Application Pool crashes immediately"
 
-**Symptoms**: nginx terminates with alert: `the event "ngx_master_*" was not signaled for 5s`
+**Symptoms**: IIS application pool for backend stops unexpectedly
 
-**Solution**: Use Windows-optimized nginx configuration
+**Solution**: Check IIS logs and Python WSGI configuration
 ```powershell
-# Copy Windows-specific nginx config
-copy deployment\nginx\nginx.conf.windows.template C:\nginx\conf\nginx.conf
+# Check IIS application pool status
+Get-WebAppPoolState -Name "DefaultAppPool"
 
-# Key Windows optimizations:
-# - daemon off;
-# - worker_processes 1;  
-# - use select;
+# Check IIS logs for errors
+Get-ChildItem "C:\inetpub\logs\LogFiles\W3SVC1" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content -Tail 50
 ```
 
-### 3. "nginx requests password on startup"
+### 3. "Python WSGI application errors"
 
-**Symptoms**: nginx CLI prompts for SSL private key password
+**Symptoms**: HTTP 500 errors when accessing backend API
 
-**Solution**: Convert encrypted key to unencrypted
+**Solution**: Check Python environment and dependencies
 ```powershell
-.\deployment\scripts\handle-encrypted-key.ps1 -KeyPath "C:\Cert\server.key" -OutputPath "C:\Cert"
+# Check Python path in web.config
+Get-Content "C:\inetpub\wwwroot\ExcelAddin\backend\web.config" | Select-String "python.exe"
+
+# Test WSGI app directly
+cd "C:\inetpub\wwwroot\ExcelAddin\backend"
+python wsgi_app.py
 ```
 
 ### 4. "npm build fails - custom-functions-metadata not found"
@@ -152,14 +167,14 @@ Get-Content logs\service.log -Tail 50 -Wait
 
 **Issue**: Service installed but won't start
 ```powershell
-# 1. Verify Python path
+# 1. Verify Python path in IIS FastCGI configuration
 where python
-nssm set ExcelAddinBackend Application "C:\Users\AppData\Local\Programs\Python\Python39\python.exe"
+# Update backend/web.config with correct Python path
 
-# 2. Check working directory
-nssm set ExcelAddinBackend AppDirectory "C:\inetpub\wwwroot\ExcelAddin\backend"
+# 2. Check IIS application physical path
+Get-WebApplication -Name "backend" -Site "Default Web Site"
 
-# 3. Verify service wrapper exists
+# 3. Verify WSGI entry point exists
 Test-Path "C:\inetpub\wwwroot\ExcelAddin\backend\service_wrapper.py"
 
 # 4. Test manual startup
@@ -213,63 +228,44 @@ http2 on;
 # ssl_stapling_verify off;
 ```
 
-**Issue**: nginx won't run as Windows service
+## IIS Backend Issues
+
+### Python FastCGI Configuration Problems
+
+#### 1. FastCGI Module Issues
 ```powershell
-# Ensure daemon off in nginx.conf
-daemon off;
+# Verify FastCGI module is installed
+Get-WindowsFeature -Name IIS-CGI
 
-# Configure NSSM properly  
-nssm set nginx Application "C:\nginx\nginx.exe"
-nssm set nginx AppParameters "-g \"daemon off;\""
+# Install if needed
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-CGI
 ```
 
-## nginx Issues
+#### 2. Python Path Configuration
+```powershell  
+# Check current Python installation
+where python
 
-### Windows-Specific nginx Problems
-
-#### 1. Process Management Issues
-```nginx
-# nginx.conf optimizations for Windows
-daemon off;                    # Required for NSSM
-worker_processes 1;           # Single worker for Windows
-events {
-    use select;               # Windows-compatible event method
-    worker_connections 1024;
-}
+# Update web.config with correct path
+# Edit backend/web.config FastCGI application fullPath
 ```
 
-#### 2. Path and File Issues
-```nginx
-# Use forward slashes in paths (even on Windows)
-ssl_certificate C:/Cert/server.crt;
-ssl_private_key C:/Cert/server.key;
-
-# Use alias instead of root for subpaths
-location /excellence/ {
-    alias C:/inetpub/wwwroot/ExcelAddin/;
-}
+#### 3. WSGI Handler Configuration  
+```xml
+<!-- Verify web.config has correct WSGI handler -->
+<add name="WSGI_HANDLER" value="wsgi_app.application" />
 ```
 
-#### 3. Service Configuration Issues
+### IIS Log Analysis
 ```powershell
-# Correct NSSM configuration for nginx
-nssm install nginx "C:\nginx\nginx.exe"
-nssm set nginx AppDirectory "C:\nginx"  
-nssm set nginx AppParameters "-g \"daemon off;\""
-nssm set nginx DisplayName "nginx Web Server"
-nssm set nginx Description "nginx HTTP server"
-```
+# Check IIS logs for errors
+Get-ChildItem "C:\inetpub\logs\LogFiles\W3SVC1" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content -Tail 50
 
-### nginx Log Analysis
-```powershell
-# Check nginx error logs
-Get-Content C:\nginx\logs\error.log -Tail 50
+# Check IIS Failed Request Tracing (if enabled)
+Get-ChildItem "C:\inetpub\logs\FailedReqLogFiles" | Sort-Object LastWriteTime -Descending
 
-# Check nginx access logs  
-Get-Content C:\nginx\logs\access.log -Tail 50
-
-# Monitor logs in real-time
-Get-Content C:\nginx\logs\error.log -Wait -Tail 10
+# Monitor IIS logs in real-time
+Get-Content "C:\inetpub\logs\LogFiles\W3SVC1\*.log" -Wait -Tail 10
 ```
 
 ## Backend Service Issues
@@ -293,9 +289,9 @@ poetry --version
 where python
 Get-Command python
 
-# Set correct path in NSSM
+# Update web.config FastCGI configuration with correct path
 $pythonPath = (Get-Command python).Source
-nssm set ExcelAddinBackend Application $pythonPath
+# Edit backend/web.config and update fullPath attribute
 ```
 
 #### 2. Dependency Issues
@@ -312,13 +308,16 @@ poetry shell
 python -c "import flask; print('Flask OK')"
 ```
 
-#### 3. Port Conflicts
+#### 3. IIS Integration Issues
 ```powershell
-# Check what's using port 5000
-netstat -ano | findstr :5000
+# Check IIS application pool status
+Get-WebAppPoolState -Name "DefaultAppPool"
 
-# Kill processes using the port
-taskkill /PID <process_id> /F
+# Restart application pool if needed
+Restart-WebAppPool -Name "DefaultAppPool"
+
+# Check IIS application configuration
+Get-WebApplication -Name "backend" -Site "Default Web Site"
 ```
 
 ### Flask Application Issues
@@ -479,45 +478,43 @@ Measure-Command { curl -k https://server01.intranet.local:8443/excellence/api/he
 
 ### Service Status Commands
 ```powershell
-# Check all services
-Get-Service ExcelAddinBackend, nginx
+# Check IIS status
+Get-Service W3SVC, WAS
 
-# View service configuration
-nssm dump ExcelAddinBackend
-nssm dump nginx
+# View IIS configuration
+Get-WebApplication -Name "backend" -Site "Default Web Site"
+Get-WebAppPoolState -Name "DefaultAppPool"
 
-# View service logs
-Get-Content C:\inetpub\wwwroot\ExcelAddin\backend\logs\service.log -Tail 50
-Get-Content C:\nginx\logs\error.log -Tail 50
+# View IIS logs  
+Get-ChildItem "C:\inetpub\logs\LogFiles\W3SVC1" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content -Tail 50
 ```
 
 ### Network Diagnostic Commands
 ```powershell
-# Test ports
-Test-NetConnection -ComputerName localhost -Port 5000  # Backend
-Test-NetConnection -ComputerName localhost -Port 8443  # nginx
+# Test IIS web server
+Test-NetConnection -ComputerName localhost -Port 80   # HTTP
+Test-NetConnection -ComputerName localhost -Port 443  # HTTPS
 
-# Check listening ports
-netstat -an | findstr :5000
-netstat -an | findstr :8443
+# Check IIS bindings
+Get-WebBinding -Name "Default Web Site"
 
-# Test SSL
-openssl s_client -connect server01.intranet.local:8443
+# Test SSL (if configured)  
+openssl s_client -connect server01.intranet.local:443
 ```
 
 ### Application Diagnostic Commands
 ```powershell
-# Test backend API
-curl http://localhost:5000/api/health
+# Test backend API through IIS
+curl http://localhost/backend/api/health
 
-# Test through nginx proxy  
-curl -k https://localhost:8443/excellence/api/health
+# Test through IIS with SSL
+curl -k https://localhost/excellence/api/health
 
 # Test frontend application
-curl -k https://localhost:8443/excellence/
+curl -k https://localhost/excellence/
 
-# Validate nginx configuration
-C:\nginx\nginx.exe -t
+# Check IIS configuration
+Get-WebConfiguration -Filter "system.webServer/fastCgi"
 ```
 
 ### Certificate Diagnostic Commands
@@ -536,9 +533,13 @@ openssl rsa -in C:\Cert\server.key -noout -modulus | openssl md5
 
 ### Log File Locations
 ```
-Backend Service Logs:
-  C:\inetpub\wwwroot\ExcelAddin\backend\logs\service.log
-  C:\inetpub\wwwroot\ExcelAddin\backend\logs\error.log
+Backend Logs:
+  C:\inetpub\logs\LogFiles\W3SVC1\*.log           # IIS access logs
+  C:\inetpub\logs\FailedReqLogFiles\*\*.xml       # IIS failed request logs
+
+Frontend Logs:
+  C:\inetpub\logs\LogFiles\W3SVC1\*.log           # IIS access logs
+  Browser Developer Console                        # Client-side errors
 
 nginx Logs:  
   C:\nginx\logs\access.log

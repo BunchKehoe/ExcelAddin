@@ -41,7 +41,7 @@ cd backend && poetry shell && python -m flask run --port=5000
 # Developer tab → Add-ins → Upload manifest.xml
 ```
 
-**Note:** Local development now uses `http://localhost:5000/api` for the backend instead of staging servers, allowing fully local development without network dependencies.
+**Note:** Local development still uses `http://localhost:5000/api` for the backend, but staging and production use the new IIS routing architecture, eliminating the need for separate backend services.
 
 ### Testing Custom Functions
 Once loaded in Excel, try these examples:
@@ -62,7 +62,7 @@ The add-in automatically detects the environment based on the hostname and confi
 
 ### Dynamic Environment Detection
 The application automatically detects its environment based on the browser hostname:
-- **localhost/127.0.0.1** → Development (uses local API server)
+- **localhost/127.0.0.1** → Development (uses localhost:5000 backend for local development)
 - **server-vs81t.intranet.local** → Staging 
 - **server-vs84.intranet.local** → Production
 - **Unknown hostnames** → Defaults to development with warnings
@@ -86,6 +86,8 @@ This project includes comprehensive documentation organized into three main guid
 
 🔧 **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Comprehensive troubleshooting tools, common issues, solutions, and diagnostic procedures
 
+📜 **[Certificate Guide](CERTIFICATE_GUIDE.md)** - Complete guide for managing Excel Add-in SSL certificates in local development
+
 ## Key Features
 
 - **Database Page**: KVG Data management with fund selection, data type filtering, and Excel integration
@@ -105,18 +107,18 @@ This project includes comprehensive documentation organized into three main guid
 ### Backend
 - **Python 3.x + Flask**: REST API service
 - **Poetry**: Dependency management and virtual environment
-- **Windows Service**: Runs as Windows service via NSSM
+- **IIS Integration**: Runs directly in IIS using FastCGI
 - **Configuration**: Environment-based configuration
 
 ### Production Infrastructure  
-- **nginx**: Reverse proxy with SSL termination
-- **NSSM**: Service management for Windows
+- **IIS**: Web server hosting both frontend and backend
+- **FastCGI**: Python integration for IIS
 - **SSL/TLS**: Enterprise certificate support
 
 ## Deployment Scenarios
 
 - **Local Development**: `https://localhost:3000` with self-signed certificates
-- **Windows Server Production**: nginx reverse proxy with enterprise SSL certificates, subpath support (e.g., `/excellence`), and Windows service management
+- **Windows Server Production**: IIS hosting both frontend and backend with enterprise SSL certificates, subpath support (e.g., `/excellence`), and integrated Python FastCGI support
 
 ## Support
 
