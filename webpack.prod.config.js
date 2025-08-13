@@ -54,6 +54,19 @@ module.exports = (env, argv) => {
     },
     plugins: [
       new HtmlWebpackPlugin({
+        template: './src/index.html',
+        filename: 'index.html',
+        chunks: [],
+        minify: isProduction ? {
+          collapseWhitespace: true,
+          removeComments: true,
+          removeRedundantAttributes: true,
+          removeScriptTypeAttributes: true,
+          removeStyleLinkTypeAttributes: true,
+          useShortDoctype: true
+        } : false
+      }),
+      new HtmlWebpackPlugin({
         template: './src/taskpane/taskpane.html',
         filename: 'taskpane.html',
         chunks: ['taskpane'],

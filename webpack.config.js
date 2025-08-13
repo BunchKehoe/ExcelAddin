@@ -42,6 +42,11 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
+      template: './src/index.html',
+      filename: 'index.html',
+      chunks: []
+    }),
+    new HtmlWebpackPlugin({
       template: './src/taskpane/taskpane.html',
       filename: 'taskpane.html',
       chunks: ['taskpane']
