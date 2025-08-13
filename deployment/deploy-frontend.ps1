@@ -116,7 +116,7 @@ if (-not $SkipInstall) {
     
     # Install NSSM service
     Write-Host "Installing NSSM service..."
-    nssm install $ServiceName $nodePath $FrontendServerScript
+    nssm install $ServiceName $nodePath
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to install NSSM service"
         exit 1
@@ -125,6 +125,7 @@ if (-not $SkipInstall) {
     # Configure service - use absolute paths for reliability
     nssm set $ServiceName DisplayName $ServiceDisplayName
     nssm set $ServiceName Description $ServiceDescription
+    nssm set $ServiceName AppParameters $FrontendServerScript
     nssm set $ServiceName AppDirectory $FrontendPath
     nssm set $ServiceName Start SERVICE_AUTO_START
     nssm set $ServiceName AppExit Default Restart
@@ -155,12 +156,12 @@ if (-not $SkipInstall) {
     Write-Host ""
     Write-Host "NSSM Configuration Verification:"
     $nssmApp = & nssm get $ServiceName Application 2>&1
-    $nssmParams = & nssm get $ServiceName Parameters 2>&1
+    $nssmParams = & nssm get $ServiceName AppParameters 2>&1
     $nssmDir = & nssm get $ServiceName AppDirectory 2>&1
     $nssmEnv = & nssm get $ServiceName AppEnvironmentExtra 2>&1
     
     Write-Host "  Application: $nssmApp"
-    Write-Host "  Parameters: $nssmParams"
+    Write-Host "  AppParameters: $nssmParams"
     Write-Host "  Directory: $nssmDir"
     Write-Host "  Environment: $nssmEnv"
 }

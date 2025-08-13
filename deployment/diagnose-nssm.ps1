@@ -31,7 +31,7 @@ Write-Host "=== NSSM CONFIGURATION ===" -ForegroundColor Cyan
 
 $nssmCommands = @(
     "get $ServiceName Application",
-    "get $ServiceName Parameters",
+    "get $ServiceName AppParameters", 
     "get $ServiceName AppDirectory",
     "get $ServiceName AppEnvironmentExtra",
     "get $ServiceName Start",

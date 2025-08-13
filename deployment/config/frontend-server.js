@@ -134,10 +134,15 @@ function handleRequest(req, res) {
 }
 
 // Verify static directory exists
+console.log('=== NSSM SERVICE DEBUGGING ===');
 console.log(`Looking for static directory: ${STATIC_DIR}`);
 console.log(`Current working directory: ${process.cwd()}`);
 console.log(`Script directory: ${__dirname}`);
 console.log(`Resolved project root: ${PROJECT_ROOT}`);
+console.log(`Process arguments: ${JSON.stringify(process.argv)}`);
+console.log(`Environment NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`Environment PORT: ${process.env.PORT}`);
+console.log(`Environment HOST: ${process.env.HOST}`);
 
 if (!fs.existsSync(STATIC_DIR)) {
   console.error(`Static directory does not exist: ${STATIC_DIR}`);

@@ -19,6 +19,33 @@ Write-Host "Switch to alternative: $SwitchToAlternative"
 Write-Host "Method: $Method"
 Write-Host ""
 
+# Quick 404 issue detection first
+Write-Host "Performing quick 404 issue detection..."
+try {
+    $quickTest = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 5 -ErrorAction Stop
+    if ($quickTest.StatusCode -eq 404) {
+        Write-Warning "DETECTED: HTTP 404 error - Frontend files missing or misconfigured!"
+        Write-Host ""
+        Write-Host "This is a common issue where the NSSM service is running but cannot find the built frontend files."
+        Write-Host "Run the specialized fix: .\fix-frontend-404.ps1 -AutoFix"
+        Write-Host ""
+        if ($AutoFix) {
+            Write-Host "Auto-fix mode enabled - running 404 fix..." -ForegroundColor Green
+            & (Join-Path $PSScriptRoot "fix-frontend-404.ps1") -AutoFix
+            return
+        } else {
+            $answer = Read-Host "Would you like to run the 404 fix now? (y/n)"
+            if ($answer -eq 'y' -or $answer -eq 'Y') {
+                & (Join-Path $PSScriptRoot "fix-frontend-404.ps1") -AutoFix
+                return
+            }
+        }
+    }
+} catch {
+    # Continue with full troubleshooting if we can't connect at all
+}
+Write-Host ""
+
 # Functions for different deployment methods
 function Test-NSSMDeployment {
     Write-Host "=== Testing NSSM Deployment ===" -ForegroundColor Cyan
