@@ -8,7 +8,7 @@
     "build:dev": "npm run build:functions && webpack --mode development",
     "build:prod": "npm run build:functions && webpack --config webpack.prod.config.js --mode production --env production",
     "build:staging": "npm run build:functions && webpack --config webpack.prod.config.js --mode production --env staging",
-    "build:functions": "custom-functions-metadata generate src/commands/commands.ts src/commands/functions.json",
+    "build:functions": "npx custom-functions-metadata generate src/commands/commands.ts src/commands/functions.json",
     "dev": "webpack serve --mode development",
     "dev:backend": "cd backend && python run.py",
     "start": "webpack serve --mode development",
