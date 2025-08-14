@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Add-in</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f3f2f1;
+            color: #323130;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0078d4;
+            border-bottom: 2px solid #0078d4;
+            padding-bottom: 10px;
+        }
+        .status {
+            background-color: #f0f9ff;
+            border: 1px solid #0078d4;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .link-group {
+            margin: 20px 0;
+        }
+        .link-group a {
+            display: inline-block;
+            background-color: #0078d4;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 5px 10px 5px 0;
+            transition: background-color 0.2s;
+        }
+        .link-group a:hover {
+            background-color: #106ebe;
+        }
+        .info {
+            background-color: #fff8dc;
+            border: 1px solid #d4b106;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Excel Add-in - Deployment Status</h1>
+        
+        <div class="status">
+            <h3>✅ Frontend Server Running</h3>
+            <p>The Excel Add-in frontend is successfully deployed and running.</p>
+        </div>
+        
+        <div class="info">
+            <h3>📋 About This Add-in</h3>
+            <p>This is the landing page for the Excel Add-in frontend server. The add-in itself loads within Excel using the taskpane and commands interfaces below.</p>
+        </div>
+        
+        <div class="link-group">
+            <h3>🔗 Add-in Components</h3>
+            <a href="/taskpane.html" target="_blank">Task Pane</a>
+            <a href="/commands.html" target="_blank">Commands</a>
+            <a href="/functions.json" target="_blank">Functions Manifest</a>
+        </div>
+        
+        <div class="link-group">
+            <h3>📁 Assets</h3>
+            <a href="/assets/" target="_blank">Static Assets</a>
+            <a href="/manifest.xml" target="_blank">Add-in Manifest</a>
+        </div>
+        
+        <div class="info">
+            <p><strong>Note:</strong> This landing page is for testing and verification purposes. The actual Excel Add-in functionality is accessed through Excel's ribbon and task pane interfaces.</p>
+        </div>
+        
+        <hr>
+        <p style="text-align: center; color: #666; font-size: 0.9em;">
+            Excel Add-in Frontend Server - Deployment ID: <span id="timestamp"></span>
+        </p>
+    </div>
+    
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+    </script>
+</body>
+</html>
