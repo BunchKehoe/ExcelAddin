@@ -20,7 +20,12 @@ $Port = 3000
 $ProjectRoot = Split-Path $PSScriptRoot -Parent
 $DistPath = Join-Path $ProjectRoot "dist"
 $LogDir = "C:\Logs\ExcelAddin"
-$NodeExe = (Get-Command node -ErrorAction SilentlyContinue)?.Source
+$NodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if ($NodeCmd) {
+    $NodeExe = $NodeCmd.Source
+} else {
+    Write-Error "Node.js not found. Please install Node.js and add to PATH."
+}
 
 # Server script content for NSSM (Windows Server 10 compatible)
 $ServerScript = @"
@@ -141,15 +146,19 @@ $nodeVersion = node --version
 Write-Host "  Node.js: $nodeVersion" -ForegroundColor Green
 
 # Check NPM
-$npmPath = (Get-Command npm -ErrorAction SilentlyContinue)?.Source
-if (-not $npmPath) {
+$npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+if ($npmCmd) {
+    $npmPath = $npmCmd.Source
+} else {
     Write-Error "npm not found. Please ensure npm is installed with Node.js."
 }
 Write-Host "  npm: Found" -ForegroundColor Green
 
 # Check NSSM
-$nssmPath = (Get-Command nssm -ErrorAction SilentlyContinue)?.Source
-if (-not $nssmPath) {
+$nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
+if ($nssmCmd) {
+    $nssmPath = $nssmCmd.Source
+} else {
     Write-Error "NSSM not found. Please install NSSM and add to PATH."
 }
 Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
@@ -225,7 +234,12 @@ $existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyCo
     Where-Object { $_.State -eq "Listen" }
 if ($existingProcess) {
     $processId = $existingProcess.OwningProcess
-    $processName = (Get-Process -Id $processId -ErrorAction SilentlyContinue)?.ProcessName
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($process) {
+        $processName = $process.ProcessName
+    } else {
+        $processName = "Unknown"
+    }
     if ($processName -ne "node" -and -not $Force) {
         Write-Warning "Port $Port is in use by process: $processName (PID: $processId)"
         Write-Warning "Use -Force to override or stop the conflicting process"

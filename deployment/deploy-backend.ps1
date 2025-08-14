@@ -30,16 +30,20 @@ Write-Host ""
 Write-Host "Checking prerequisites..." -ForegroundColor Yellow
 
 # Check Python
-$pythonPath = (Get-Command python -ErrorAction SilentlyContinue)?.Source
-if (-not $pythonPath) {
+$pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+if ($pythonCmd) {
+    $pythonPath = $pythonCmd.Source
+} else {
     Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
 }
 $pythonVersion = python --version 2>&1
 Write-Host "  Python: $pythonVersion" -ForegroundColor Green
 
 # Check NSSM
-$nssmPath = (Get-Command nssm -ErrorAction SilentlyContinue)?.Source
-if (-not $nssmPath) {
+$nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
+if ($nssmCmd) {
+    $nssmPath = $nssmCmd.Source
+} else {
     Write-Error "NSSM not found. Please install NSSM and add to PATH."
 }
 Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
@@ -72,7 +76,12 @@ $existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyCo
     Where-Object { $_.State -eq "Listen" }
 if ($existingProcess) {
     $processId = $existingProcess.OwningProcess
-    $processName = (Get-Process -Id $processId -ErrorAction SilentlyContinue)?.ProcessName
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($process) {
+        $processName = $process.ProcessName
+    } else {
+        $processName = "Unknown"
+    }
     if ($processName -ne "python" -and -not $Force) {
         Write-Warning "Port $Port is in use by process: $processName (PID: $processId)"
         Write-Warning "Use -Force to override"
@@ -107,8 +116,9 @@ if (-not $SkipInstall) {
     Set-Location $BackendPath
     
     # Check for Poetry first (preferred), then pip
-    $poetryPath = (Get-Command poetry -ErrorAction SilentlyContinue)?.Source
-    if ($poetryPath) {
+    $poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
+    if ($poetryCmd) {
+        $poetryPath = $poetryCmd.Source
         Write-Host "  Using Poetry for dependency management" -ForegroundColor Green
         poetry install
         if ($LASTEXITCODE -ne 0) {
