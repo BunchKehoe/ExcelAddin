@@ -37,8 +37,7 @@ temp/
 .tmp/
 
 # Vite-generated root HTML files (generated from src/)
-/taskpane.html
-/commands.html
+
 
 # Deployment artifacts
 deployment-package/
