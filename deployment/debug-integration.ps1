@@ -340,7 +340,7 @@ if (Test-Path $LogDir) {
         $logPath = Join-Path $LogDir $logFile
         if (Test-Path $logPath) {
             $logInfo = Get-Item $logPath
-            Write-Host "  $logFile: $($logInfo.Length) bytes, modified $($logInfo.LastWriteTime)" -ForegroundColor Green
+            Write-Host "  ${logFile}: $($logInfo.Length) bytes, modified $($logInfo.LastWriteTime)" -ForegroundColor Green
             
             if ($Detailed) {
                 $recentLogs = Get-Content $logPath -Tail 3 -ErrorAction SilentlyContinue
@@ -352,7 +352,7 @@ if (Test-Path $LogDir) {
                 }
             }
         } else {
-            Write-Warning "  $logFile: Not found"
+            Write-Warning "  ${logFile}: Not found"
         }
     }
 } else {
@@ -362,7 +362,7 @@ if (Test-Path $LogDir) {
 Write-Host ""
 
 # 9. Summary and Recommendations
-Write-Host "9. SUMMARY & RECOMMENDATIONS" -ForegroundColor Yellow
+Write-Host "9. SUMMARY and RECOMMENDATIONS" -ForegroundColor Yellow
 Write-Host "=" * 50
 
 $issues = @()

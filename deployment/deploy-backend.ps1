@@ -96,17 +96,40 @@ if ($existingService) {
     
     if ($existingService.Status -eq "Running") {
         Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 3
+        
+        # Wait for service to fully stop with status checking
+        $timeout = 15
+        $elapsed = 0
+        do {
+            Start-Sleep -Seconds 2
+            $elapsed += 2
+            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        } while ($service.Status -eq "Running" -and $elapsed -lt $timeout)
+        
+        if ($service.Status -eq "Running") {
+            Write-Warning "Service did not stop within $timeout seconds, forcing removal"
+        } else {
+            Write-Host "Service stopped successfully" -ForegroundColor Green
+        }
     }
     
     Write-Host "Removing existing service..." -ForegroundColor Yellow
     nssm remove $ServiceName confirm
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
     
-    # Verify removal
-    $checkService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    # Verify removal with retries
+    $timeout = 10
+    $elapsed = 0
+    do {
+        Start-Sleep -Seconds 1
+        $elapsed += 1
+        $checkService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    } while ($checkService -and $elapsed -lt $timeout)
+    
     if ($checkService) {
-        Write-Error "Failed to remove existing service"
+        Write-Error "Failed to remove existing service after $timeout seconds"
+    } else {
+        Write-Host "Service removed successfully" -ForegroundColor Green
     }
 }
 
@@ -176,13 +199,22 @@ if ($Debug) {
 Write-Host "Starting service..." -ForegroundColor Yellow
 Start-Service -Name $ServiceName
 
-# Wait for service to start
-Start-Sleep -Seconds 5
+# Wait for service to start with status checking
+$timeout = 20
+$elapsed = 0
+do {
+    Start-Sleep -Seconds 2
+    $elapsed += 2
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+} while ((-not $service -or $service.Status -ne "Running") -and $elapsed -lt $timeout)
 
 # Verify service status
-$service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $service -or $service.Status -ne "Running") {
-    Write-Error "Service failed to start. Check logs at: $LogDir"
+    Write-Error "Service failed to start within $timeout seconds. Check logs at: $LogDir"
+    if ($service) {
+        Write-Host "  Current Status: $($service.Status)" -ForegroundColor Red
+    }
+    exit 1
 }
 
 Write-Host "Service started successfully!" -ForegroundColor Green
