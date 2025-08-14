@@ -59,7 +59,6 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       rollupOptions: {
         input: {
-          main: resolve(fileURLToPath(new URL('.', import.meta.url)), 'index.html'),
           taskpane: resolve(fileURLToPath(new URL('.', import.meta.url)), 'taskpane.html'),
           commands: resolve(fileURLToPath(new URL('.', import.meta.url)), 'commands.html')
         },
