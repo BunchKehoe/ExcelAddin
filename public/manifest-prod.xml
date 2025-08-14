@@ -15,18 +15,18 @@ Update the domain names and GUID before deployment.
   <Version>1.0.0.0</Version>
   
   <!-- Provider information -->
-  <ProviderName>PrimeExcelence</ProviderName>
+  <ProviderName>Prime Capital Advisory Group</ProviderName>
   
   <!-- Default locale -->
   <DefaultLocale>en-US</DefaultLocale>
   
   <!-- Display name -->
-  <DisplayName DefaultValue="PrimeExcelence (Production)"/>
-  <Description DefaultValue="Excel Add-in for financial data management - Production Environment"/>
+  <DisplayName DefaultValue="Prime Capital (Production)"/>
+  <Description DefaultValue="Excel Add-in for financial data management - Prime Capital Advisory Group - Production Environment"/>
   
   <!-- Icons -->
-  <IconUrl DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/icon-64.png"/>
+  <IconUrl DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/PCAG_trans_32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/PCAG_trans_80.png"/>
   
   <!-- Support and help URLs -->
   <SupportUrl DefaultValue="https://your-company.com/support"/>
@@ -112,9 +112,9 @@ Update the domain names and GUID before deployment.
     <!-- Resources -->
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/PCAG_trans_16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/PCAG_trans_32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://server-vs84.intranet.local:9443/excellence/assets/PCAG_trans_80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs84.intranet.local:9443/excellence"/>
@@ -123,14 +123,14 @@ Update the domain names and GUID before deployment.
         <bt:Url id="Taskpane.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Get started with PrimeExcelence"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="PrimeExcelence"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Get started with Prime Capital"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="Prime Capital"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Taskpane"/>
         <bt:String id="CustomFunctions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Your PrimeExcelence add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open PrimeExcelence task pane for financial data management"/>
+        <bt:String id="GetStarted.Description" DefaultValue="Your Prime Capital add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open Prime Capital task pane for financial data management"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

@@ -71,7 +71,7 @@ const App: React.FC = () => {
           <Container maxWidth="sm" sx={{ mt: 4 }}>
             <Typography variant="h4" component="h1" gutterBottom align="center">
               Welcome to<br />
-              Prime Excellence
+              Prime Capital
             </Typography>
             <Typography variant="body1" paragraph align="center">
               Select a function from the buttons below to get started.
@@ -141,8 +141,8 @@ const App: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
               <Box
                 component="img"
-                src="assets/icon-16.svg"
-                alt="Prime Logo"
+                src="assets/PCAG_white_trans.png"
+                alt="Prime Capital Logo"
                 sx={{
                   height: 24,
                   width: 24,
@@ -151,9 +151,9 @@ const App: React.FC = () => {
               />
               <Typography variant="h6" component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <Box component="span" sx={{ fontWeight: 'bold' }}>
-                  Excel
+                  Prime Capital
                 </Box>
-                lence
+                Excellence
               </Typography>
             </Box>
             {currentPage !== 'home' && (
