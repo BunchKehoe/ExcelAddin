@@ -1,5 +1,6 @@
 # IIS Proxy Deployment Script for ExcelAddin
 # Deploys and configures IIS reverse proxy to forward requests to frontend (port 3000) and backend (port 5000)
+# Automatically removes ALL existing ExcelAddin and ExcelAddin-Proxy instances from IIS before deployment
 
 param(
     [string]$SiteName = "ExcelAddin-Proxy",
@@ -60,29 +61,73 @@ try {
         Write-Host "  ✅ URL Rewrite module is available" -ForegroundColor Green
     }
 
-    # Remove existing site if it exists
-    $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-    if ($existingSite) {
-        if ($Force) {
-            Write-Host "Removing existing site '$SiteName'..." -ForegroundColor Yellow
-            Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
-            Remove-Website -Name $SiteName
-            Write-Host "  ✅ Existing site removed" -ForegroundColor Green
-        } else {
-            Write-Error "Site '$SiteName' already exists. Use -Force to override."
+    # Remove ALL existing ExcelAddin sites and app pools
+    Write-Host "Cleaning up any existing ExcelAddin instances in IIS..." -ForegroundColor Yellow
+    
+    # Find and remove existing websites
+    $existingSites = Get-Website | Where-Object { $_.Name -like "*ExcelAddin*" }
+    if ($existingSites) {
+        Write-Host "  Found $($existingSites.Count) existing ExcelAddin website(s) to remove:" -ForegroundColor Yellow
+        foreach ($site in $existingSites) {
+            Write-Host "    • $($site.Name) (State: $($site.State))" -ForegroundColor Gray
+            try {
+                if ($site.State -eq "Started") {
+                    Stop-Website -Name $site.Name -ErrorAction SilentlyContinue
+                    Start-Sleep -Seconds 2
+                }
+                Remove-Website -Name $site.Name -ErrorAction Stop
+                Write-Host "      ✅ Removed website: $($site.Name)" -ForegroundColor Green
+            } catch {
+                Write-Warning "      ⚠️  Failed to remove website '$($site.Name)': $($_.Exception.Message)"
+            }
         }
+    } else {
+        Write-Host "  ✅ No existing ExcelAddin websites found" -ForegroundColor Green
+    }
+    
+    # Find and remove existing application pools
+    $existingPools = Get-IISAppPool | Where-Object { $_.Name -like "*ExcelAddin*" }
+    if ($existingPools) {
+        Write-Host "  Found $($existingPools.Count) existing ExcelAddin application pool(s) to remove:" -ForegroundColor Yellow
+        foreach ($pool in $existingPools) {
+            Write-Host "    • $($pool.Name) (State: $($pool.State))" -ForegroundColor Gray
+            try {
+                if ($pool.State -eq "Started") {
+                    Stop-WebAppPool -Name $pool.Name -ErrorAction SilentlyContinue
+                    Start-Sleep -Seconds 2
+                }
+                Remove-WebAppPool -Name $pool.Name -ErrorAction Stop
+                Write-Host "      ✅ Removed application pool: $($pool.Name)" -ForegroundColor Green
+            } catch {
+                Write-Warning "      ⚠️  Failed to remove application pool '$($pool.Name)': $($_.Exception.Message)"
+            }
+        }
+    } else {
+        Write-Host "  ✅ No existing ExcelAddin application pools found" -ForegroundColor Green
     }
 
-    # Remove existing app pool if it exists
+    Write-Host "  ✅ ExcelAddin cleanup completed" -ForegroundColor Green
+    Write-Host ""
+
+    # Verify cleanup was successful (legacy check - should be covered by cleanup above)
+    $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
     $existingPool = Get-IISAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-    if ($existingPool) {
-        if ($Force) {
-            Write-Host "Removing existing application pool '$AppPoolName'..." -ForegroundColor Yellow
-            Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-            Remove-WebAppPool -Name $AppPoolName
-            Write-Host "  ✅ Existing application pool removed" -ForegroundColor Green
+    
+    if ($existingSite -or $existingPool) {
+        if (-not $Force) {
+            Write-Error "Site '$SiteName' or Application Pool '$AppPoolName' still exists after cleanup. Use -Force to override any remaining conflicts."
         } else {
-            Write-Error "Application pool '$AppPoolName' already exists. Use -Force to override."
+            # Force cleanup of any remaining instances
+            if ($existingSite) {
+                Write-Host "Force removing remaining site '$SiteName'..." -ForegroundColor Yellow
+                Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
+                Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
+            }
+            if ($existingPool) {
+                Write-Host "Force removing remaining application pool '$AppPoolName'..." -ForegroundColor Yellow
+                Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+                Remove-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+            }
         }
     }
 
