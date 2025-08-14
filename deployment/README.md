@@ -36,7 +36,10 @@ cd deployment
 # Frontend only  
 .\deploy-frontend.ps1 -Environment staging
 
-# IIS configuration
+# IIS Proxy only
+.\deploy-iis-proxy.ps1
+
+# IIS configuration (legacy)
 .\configure-iis.ps1
 ```
 
@@ -67,9 +70,10 @@ Excel Client → IIS (9443) → Frontend Service (3000)
   - Technology: Express.js serving Vite build
   - Endpoints: `/excellence/*`, static files
 
-- **IIS Proxy**: `ExcelAddin` site
+- **IIS Proxy**: `ExcelAddin-Proxy` site
   - Port: 9443 (HTTPS)
   - Routes to appropriate services
+  - Deployed via `deploy-iis-proxy.ps1`
 
 ## Build System Changes
 
@@ -116,6 +120,33 @@ npm run lint
 - `/api/health` - Backend health check
 
 ## Service Management
+
+### IIS Proxy Management
+The IIS proxy can be deployed and managed independently:
+
+```powershell
+# Deploy IIS proxy only
+.\deploy-iis-proxy.ps1
+
+# Deploy with custom settings
+.\deploy-iis-proxy.ps1 -SiteName "MyExcelProxy" -Port 8443 -Force
+
+# Management commands
+Start-Website -Name "ExcelAddin-Proxy"
+Stop-Website -Name "ExcelAddin-Proxy" 
+Get-Website -Name "ExcelAddin-Proxy" | Select Name, State, PhysicalPath
+
+# Check proxy status
+Invoke-WebRequest https://localhost:9443/ -UseBasicParsing
+```
+
+Key features of the IIS proxy deployment:
+- **Independent deployment**: Can be deployed separately from frontend/backend services
+- **Advanced URL rewriting**: Handles all Excel Add-in endpoints with proper forwarding
+- **CORS support**: Configured for Excel Add-in compatibility
+- **HTTPS support**: Automatic SSL certificate detection and binding
+- **Health monitoring**: Built-in status page and service health checks
+- **Comprehensive logging**: Detailed deployment and runtime logging
 
 ### Frontend Service Commands
 ```powershell

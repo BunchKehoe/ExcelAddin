@@ -7,6 +7,7 @@ param(
     [switch]$SkipBuild,
     [switch]$SkipBackend,
     [switch]$SkipFrontend,
+    [switch]$SkipIISProxy,
     [switch]$SkipTests,
     [switch]$Force,
     [switch]$Debug
@@ -24,10 +25,11 @@ Write-Host ""
 $ScriptDir = $PSScriptRoot
 $BackendScript = Join-Path $ScriptDir "deploy-backend.ps1"
 $FrontendScript = Join-Path $ScriptDir "deploy-frontend.ps1"
+$IISProxyScript = Join-Path $ScriptDir "deploy-iis-proxy.ps1"
 $DebugScript = Join-Path $ScriptDir "debug-integration.ps1"
 
 # Verify scripts exist
-$requiredScripts = @($BackendScript, $FrontendScript, $DebugScript)
+$requiredScripts = @($BackendScript, $FrontendScript, $IISProxyScript, $DebugScript)
 foreach ($script in $requiredScripts) {
     if (-not (Test-Path $script)) {
         Write-Error "Required script not found: $script"
@@ -74,6 +76,25 @@ try {
         }
         
         Write-Host "Frontend deployment completed!" -ForegroundColor Green
+        Write-Host ""
+    }
+    
+    # Deploy IIS Proxy
+    if (-not $SkipIISProxy) {
+        Write-Host "DEPLOYING IIS PROXY..." -ForegroundColor Cyan
+        Write-Host ""
+        
+        $iisProxyParams = @{
+            Force = $Force
+            Debug = $Debug
+        }
+        
+        & $IISProxyScript @iisProxyParams
+        if ($LASTEXITCODE -ne 0) {
+            throw "IIS Proxy deployment failed"
+        }
+        
+        Write-Host "IIS Proxy deployment completed!" -ForegroundColor Green
         Write-Host ""
     }
     
