@@ -1,45 +1,58 @@
-# Excel Add-in - IIS Deployment Guide
+# Excel Add-in - Deployment Guide
 
-## Quick Setup for Existing IIS Servers
+## NEW DEPLOYMENT SYSTEM
 
-**Prerequisites:** Windows Server with IIS, URL Rewrite Module, and Application Request Routing (ARR) installed.
+**This deployment system has been completely redesigned with a clean separation of concerns.**
 
-### 1. Deploy to IIS (One-time Setup)
+⚠️ **BREAKING CHANGE**: The previous IIS-hosted deployment has been replaced with a modern service-based architecture.
+
+## Quick Deployment
+
+**Prerequisites:** Windows 10/Server with IIS, Node.js, Python 3.8+, PM2, and NSSM installed.
+
+### 1. Initial Deployment (First Time)
 ```powershell
-# Run as Administrator
-.\deployment\scripts\deploy-to-existing-iis.ps1
+# Run as Administrator from the deployment folder
+.\deploy-all.ps1
 ```
 
-### 2. Build and Deploy Application  
+### 2. Update Existing Deployment
 ```powershell
-# Build React app and deploy to IIS
-.\deployment\scripts\build-and-deploy-iis.ps1
+# Run as Administrator to update services
+.\update-all.ps1
 ```
 
 ### 3. Test Installation
 ```powershell
-# Verify everything works
-.\deployment\scripts\test-iis-simple.ps1
+# Comprehensive testing suite
+.\test-deployment.ps1
 ```
 
-**That's it!** Your application will be available at: `https://server-vs81t.intranet.local:9443/excellence/`
+**Your application will be available at:** `https://server-vs81t.intranet.local:9443`
 
-## How It Works
+## New Architecture
 
-### Architecture
 ```
-Excel Add-in → IIS (Port 9443) → Flask Backend (Port 5000)
+Excel Client → IIS Proxy (Port 9443) → Backend Service (Port 5000)
+                                   ↘ Frontend Service (Port 3000)
 ```
 
-- **IIS** serves React frontend files and proxies API calls
-- **Flask** backend handles API requests on port 5000  
-- **SSL** certificates from `C:\Cert\server-vs81t.(crt|key)`
-- **Files** deployed to `C:\inetpub\wwwroot\ExcelAddin\excellence\`
+**Key Changes:**
+- **IIS**: Reverse proxy ONLY (no hosting)
+- **Backend**: Python Flask via NSSM Windows Service (Port 5000)
+- **Frontend**: React app via PM2 Service (Port 3000)
+- **SSL**: Handled at IIS proxy level
+- **Simplified Scripts**: Only 5 deployment scripts total
+
+### Service Details
+- **Backend Service**: `ExcelAddin-Backend` (NSSM)
+- **Frontend Service**: `exceladdin-frontend` (PM2)
+- **IIS Site**: `ExcelAddin` (Reverse proxy on port 9443)
 
 ### URL Structure
-- Frontend: `https://server-vs81t.intranet.local:9443/excellence/`
-- API: `https://server-vs81t.intranet.local:9443/excellence/api/*` → proxied to `http://localhost:5000/api/*`
-- Health check: `https://server-vs81t.intranet.local:9443/health`
+- Frontend: `https://server-vs81t.intranet.local:9443/excellence/` → `http://localhost:3000/`
+- API: `https://server-vs81t.intranet.local:9443/api/` → `http://localhost:5000/api/`
+- Health check: `https://server-vs81t.intranet.local:9443/api/health`
 
 ## Development & Building
 

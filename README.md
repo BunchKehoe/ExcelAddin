@@ -41,7 +41,24 @@ cd backend && poetry shell && python -m flask run --port=5000
 # Developer tab → Add-ins → Upload manifest.xml
 ```
 
-**Note:** Local development still uses `http://localhost:5000/api` for the backend, but staging and production use the new IIS routing architecture, eliminating the need for separate backend services.
+### For Production/Staging Deployment
+
+**NEW SERVICE-BASED ARCHITECTURE** - The deployment system has been completely redesigned:
+
+```bash
+# Deploy to staging/production server (Windows 10)
+cd deployment
+.\deploy-all.ps1       # Initial deployment (as Administrator)
+.\update-all.ps1       # Updates after first deployment
+.\test-deployment.ps1  # Comprehensive testing
+
+# Individual service deployment
+.\deploy-backend.ps1   # Deploy Python backend via NSSM
+.\deploy-frontend.ps1  # Deploy React frontend via PM2
+```
+
+**Architecture**: IIS reverse proxy → Backend service (NSSM) + Frontend service (PM2)
+**Public URL**: https://server-vs81t.intranet.local:9443
 
 ### Testing Custom Functions
 Once loaded in Excel, try these examples:

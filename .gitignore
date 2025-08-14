@@ -67,3 +67,9 @@ venv/
 ENV/
 env/
 .venv/
+
+# Service logs
+logs/
+
+# Backup files
+*-backup.*
