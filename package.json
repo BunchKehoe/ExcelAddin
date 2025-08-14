@@ -4,12 +4,12 @@
   "description": "Excel Add-in built with Vite, React, and TypeScript",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "vite build --mode production",
-    "build:dev": "vite build --mode development", 
-    "build:staging": "vite build --mode staging",
-    "build:prod": "vite build --mode production",
-    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "dev": "npx vite --host 0.0.0.0 --port 3000",
+    "build": "npx vite build --mode production",
+    "build:dev": "npx vite build --mode development", 
+    "build:staging": "npx vite build --mode staging",
+    "build:prod": "npx vite build --mode production",
+    "preview": "npx vite preview --host 0.0.0.0 --port 3000",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.cache",
     "validate": "office-addin-validator manifest.xml",
@@ -18,7 +18,7 @@
     "cert:install": "office-addin-dev-certs install",
     "cert:verify": "office-addin-dev-certs verify",
     "cert:uninstall": "office-addin-dev-certs uninstall",
-    "serve:prod": "vite preview --host 0.0.0.0 --port 3000 --https"
+    "serve:prod": "npx vite preview --host 0.0.0.0 --port 3000 --https"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
