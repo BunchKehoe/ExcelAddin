@@ -168,12 +168,12 @@ npm run dev
 
 ### Integration with Build Process
 
-The webpack configuration automatically handles certificates:
+The Vite configuration automatically handles certificates:
 
 ```javascript
-// webpack.config.js handles certificate detection
-const certPath = require('os').homedir() + '/.office-addin-dev-certs/localhost.crt';
-const keyPath = require('os').homedir() + '/.office-addin-dev-certs/localhost.key';
+// vite.config.mjs handles certificate detection
+const certPath = homedir() + '/.office-addin-dev-certs/localhost.crt';
+const keyPath = homedir() + '/.office-addin-dev-certs/localhost.key';
 
 if (existsSync(certPath) && existsSync(keyPath)) {
     // Use proper certificates

@@ -41,7 +41,7 @@ The add-in consists of two main components:
 - **React 19.1.1**: Modern UI framework with hooks and functional components
 - **TypeScript 5.9.2**: Type-safe JavaScript with full IntelliSense support
 - **Material UI 7.3.1**: Google's Material Design components for React
-- **Webpack 5.101.0**: Module bundler with optimized production builds
+- **Vite 5.1.4**: Modern build tool with fast development and optimized production builds
 - **Office.js**: Microsoft's JavaScript API for Office integration
 
 ### Backend
@@ -91,8 +91,7 @@ ExcelAddin/
 ├── dist/                       # Built frontend files (generated)
 ├── manifest*.xml               # Excel add-in manifests
 ├── package.json                # npm dependencies and scripts
-├── webpack.config.js           # Development build config
-├── webpack.prod.config.js      # Production build config
+├── vite.config.mjs             # Build configuration (replaces webpack)
 └── tsconfig.json               # TypeScript configuration
 ```
 
@@ -166,8 +165,8 @@ ExcelAddin/
 
 ### Performance Optimizations
 - **Lazy Loading**: Pages load on-demand to reduce initial bundle size
-- **Bundle Splitting**: Webpack separates vendor and application code
+- **Code Splitting**: Vite automatically separates vendor and application code
 - **Optimized Charts**: Custom SVG charts instead of heavy charting libraries
-- **Service Workers**: Caching for improved load times (when applicable)
+- **Fast Development**: Vite's HMR provides instant updates during development
 
 This application guide provides the foundation for understanding the PrimeExcelence Excel add-in. For detailed deployment instructions, see the [Deployment Guide](DEPLOYMENT_GUIDE.md), and for troubleshooting assistance, see the [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md).

@@ -10,7 +10,7 @@ A comprehensive Excel JavaScript add-in built with modern web technologies (Type
   - `PC.JOINCELLS(range, delimiter)` - Join cell ranges with custom delimiters
 - **🔧 Multi-Environment Support** - Configured for local development, staging, and production
 - **🌐 Dynamic Configuration** - Automatically detects environment and configures API endpoints
-- **🚀 Modern Build System** - Webpack-based with TypeScript, hot reloading, and optimized production builds
+- **🚀 Modern Build System** - Vite-based with TypeScript, fast HMR, and optimized production builds
 
 ## Quick Start
 
@@ -118,7 +118,7 @@ This project includes comprehensive documentation organized into three main guid
 - **React 19.1.1**: Modern UI framework
 - **TypeScript 5.9.2**: Type-safe JavaScript
 - **Material UI 7.3.1**: Google's Material Design components
-- **Webpack 5.101.0**: Optimized bundle (~338 KB, 65% smaller than before)
+- **Vite 5.1.4**: Modern build tool with fast development and optimized production builds
 - **Office.js**: Microsoft's JavaScript API for Office integration
 
 ### Backend

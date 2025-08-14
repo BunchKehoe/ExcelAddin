@@ -132,7 +132,7 @@ The frontend will automatically detect the local environment and use `http://loc
 - PowerShell execution privileges
 - SSL certificates properly configured on staging server
 
-**Important:** Staging builds use the production webpack configuration (`webpack.prod.config.js`) which does not require Office Add-in development certificates. The staging server handles SSL through IIS configuration.
+**Important:** Staging builds use the Vite production build configuration which does not require Office Add-in development certificates. The staging server handles SSL through IIS configuration.
 
 ### Build & Deploy
 ```bash
