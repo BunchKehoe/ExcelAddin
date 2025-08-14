@@ -1,173 +1,127 @@
-# ExcelAddin Update Deployment Script
-# Updates existing services without full reconfiguration
-
+# Simple Excel Add-in Update Script
 param(
-    [switch]$RestartServices,
     [switch]$UpdateDependencies
 )
 
-# Import common functions
-. (Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "common.ps1")
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Split-Path -Parent $ScriptDir
 
-Write-Header "ExcelAddin Update Deployment"
-
-# Check prerequisites (skip installation checks)
-if (-not (Test-Administrator)) {
-    Write-Error "This script must be run as Administrator"
-    exit 1
-}
-
-$ProjectRoot = Get-ProjectRoot
-$BackendPath = Get-BackendPath
+Write-Host "===================================================="
+Write-Host "Excel Add-in Update Deployment"
+Write-Host "===================================================="
+Write-Host "Project Root: $ProjectRoot"
+Write-Host ""
 
 try {
     # Update Backend
-    Write-Header "Step 1: Update Backend"
+    Write-Host "Step 1: Update Backend"
+    Write-Host "----------------------------------------------------"
     
-    Push-Location $BackendPath
+    # Navigate to backend directory
+    $BackendPath = Join-Path $ProjectRoot "backend"
+    Set-Location $BackendPath
     
-    # Update Python dependencies if requested
     if ($UpdateDependencies) {
         Write-Host "Updating Python dependencies..."
-        if (Test-Path "pyproject.toml") {
-            if (Test-Command "poetry") {
-                poetry install
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Warning "Poetry install failed, continuing anyway"
-                }
-            }
+        pip install -r requirements.txt --upgrade
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Python dependency update failed, continuing..."
         }
     }
     
     # Restart backend service
     Write-Host "Restarting backend service..."
-    try {
-        Restart-Service -Name "ExcelAddin-Backend" -Force
-        Start-Sleep -Seconds 10
-        
-        # Verify backend is responding
-        $response = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/health" -TimeoutSec 15
-        Write-Success "Backend updated and responding: $($response.status)"
-    } catch {
-        Write-Warning "Backend restart failed or not responding: $($_.Exception.Message)"
+    Restart-Service -Name "ExcelAddin-Backend" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 10
+    
+    # Check backend status
+    $backendService = Get-Service -Name "ExcelAddin-Backend" -ErrorAction SilentlyContinue
+    if ($backendService -and $backendService.Status -eq "Running") {
+        Write-Host "✅ Backend service restarted successfully"
+    } else {
+        Write-Host "⚠️  Backend service restart issues"
     }
     
-    Pop-Location
-    
     # Update Frontend
-    Write-Header "Step 2: Update Frontend"
+    Write-Host ""
+    Write-Host "Step 2: Update Frontend"
+    Write-Host "----------------------------------------------------"
     
-    Push-Location $ProjectRoot
+    # Navigate to project root
+    Set-Location $ProjectRoot
     
-    # Update Node.js dependencies if requested
     if ($UpdateDependencies) {
         Write-Host "Updating Node.js dependencies..."
         npm install
         if ($LASTEXITCODE -ne 0) {
-            Write-Warning "npm install failed, continuing anyway"
+            Write-Warning "npm install failed, continuing..."
         }
     }
     
-    # Rebuild frontend
-    Write-Host "Rebuilding frontend..."
+    # Clean and rebuild frontend
+    Write-Host "Cleaning previous build..."
+    if (Test-Path "dist") {
+        Remove-Item "dist" -Recurse -Force
+    }
     
-    # First try the full build with custom functions
+    Write-Host "Rebuilding frontend..."
     npm run build:staging
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Full build failed, attempting web-only build..."
-        
-        # Create fallback functions.json if it doesn't exist
-        if (-not (Test-Path "src\commands\functions.json")) {
-            Write-Host "Creating fallback functions.json..."
-            Copy-Item "src\commands\functions.json.fallback" "src\commands\functions.json"
-        }
-        
-        # Try web-only build
-        npm run build:web
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Both full build and web-only build failed"
-            exit 1
-        }
-        Write-Warning "Web-only build completed (Excel custom functions may not work)"
-    } else {
-        Write-Success "Full build completed successfully"
+        Write-Error "Frontend build failed"
+        exit 1
     }
     
-    # Restart NSSM service
+    # Restart frontend service
     Write-Host "Restarting frontend service..."
-    try {
-        Restart-Service -Name "ExcelAddin-Frontend" -Force
-        Start-Sleep -Seconds 10
-        
-        # Verify frontend is responding
-        $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 15
-        Write-Success "Frontend updated and responding: HTTP $($response.StatusCode)"
-    } catch {
-        Write-Warning "Frontend restart failed or not responding: $($_.Exception.Message)"
-    }
+    Restart-Service -Name "ExcelAddin-Frontend" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 10
     
-    Pop-Location
-    
-    # Optionally restart services
-    if ($RestartServices) {
-        Write-Header "Step 3: Restart All Services"
-        
-        # Restart IIS
-        Write-Host "Restarting IIS..."
-        try {
-            iisreset /restart
-            Start-Sleep -Seconds 10
-            Write-Success "IIS restarted"
-        } catch {
-            Write-Warning "IIS restart failed: $($_.Exception.Message)"
-        }
-    }
-    
-    # Verification
-    Write-Header "Update Verification"
-    
-    # Check services
-    $backendService = Get-Service -Name "ExcelAddin-Backend" -ErrorAction SilentlyContinue
-    if ($backendService -and $backendService.Status -eq "Running") {
-        Write-Success "Backend service: Running"
-    } else {
-        Write-Warning "Backend service status: $($backendService.Status)"
-    }
-    
+    # Check frontend status
     $frontendService = Get-Service -Name "ExcelAddin-Frontend" -ErrorAction SilentlyContinue
     if ($frontendService -and $frontendService.Status -eq "Running") {
-        Write-Success "Frontend service: Running"
+        Write-Host "✅ Frontend service restarted successfully"
     } else {
-        Write-Warning "Frontend service is not running"
+        Write-Host "⚠️  Frontend service restart issues"
     }
     
-    $site = Get-IISSite -Name "ExcelAddin" -ErrorAction SilentlyContinue
-    if ($site -and $site.State -eq "Started") {
-        Write-Success "IIS site: Started"
-    } else {
-        Write-Warning "IIS site state: $($site.State)"
+    # Test services
+    Write-Host ""
+    Write-Host "Step 3: Verify Services"
+    Write-Host "----------------------------------------------------"
+    
+    # Test backend
+    try {
+        $healthCheck = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/health" -TimeoutSec 10
+        Write-Host "✅ Backend health check: OK"
+    } catch {
+        Write-Host "❌ Backend health check failed"
     }
     
-    Write-Header "Update Complete"
-    Write-Success "ExcelAddin services have been updated successfully"
-    Write-Host ""
-    Write-Host "Updated Components:"
-    Write-Host "- Backend: Restarted and verified"
-    Write-Host "- Frontend: Rebuilt and restarted"
-    if ($RestartServices) {
-        Write-Host "- IIS: Restarted"
+    # Test frontend
+    try {
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -UseBasicParsing -TimeoutSec 10
+        if ($response.StatusCode -eq 200) {
+            Write-Host "✅ Frontend health check: OK"
+        } else {
+            Write-Host "⚠️  Frontend returned HTTP $($response.StatusCode)"
+        }
+    } catch {
+        Write-Host "❌ Frontend health check failed"
     }
+    
     Write-Host ""
-    Write-Host "Public URL: https://server-vs81t.intranet.local:9443"
+    Write-Host "===================================================="
+    Write-Host "Update Completed Successfully!"
+    Write-Host "===================================================="
+    Write-Host "Services:"
+    Write-Host "- Backend:  ExcelAddin-Backend  (http://127.0.0.1:5000)"
+    Write-Host "- Frontend: ExcelAddin-Frontend (http://127.0.0.1:3000)"
     Write-Host ""
     
 } catch {
     Write-Error "Update failed: $($_.Exception.Message)"
-    Write-Host $_.ScriptStackTrace
     exit 1
 } finally {
-    # Ensure we're back to the original location
-    if ((Get-Location).Path -ne $PSScriptRoot) {
-        Set-Location $PSScriptRoot
-    }
+    # Return to script directory
+    Set-Location $ScriptDir
 }
