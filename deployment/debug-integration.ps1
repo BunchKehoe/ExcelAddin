@@ -11,7 +11,7 @@ $ErrorActionPreference = "Continue"
 
 # Configuration
 $BackendServiceName = "ExcelAddin-Backend"  
-$FrontendServiceName = "ExcelAddin-Frontend"
+$FrontendTaskName = "ExcelAddin-Frontend"  # Changed from service to task
 $BackendPort = 5000
 $FrontendPort = 3000
 $IISPort = 9443
@@ -51,6 +51,55 @@ function Get-ServiceDetails {
             StartType = $service.StartType
             DisplayName = $service.DisplayName
         }
+    }
+    return $null
+}
+
+function Get-TaskDetails {
+    param($TaskName)
+    try {
+        # Query the scheduled task
+        $taskInfo = schtasks /query /tn $TaskName /fo LIST 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            # Parse the task information
+            $status = "Unknown"
+            $nextRun = "Unknown"
+            $lastRun = "Unknown"
+            
+            foreach ($line in $taskInfo) {
+                if ($line -like "*Status:*") {
+                    $status = ($line -split ":")[1].Trim()
+                }
+                if ($line -like "*Next Run Time:*") {
+                    $nextRun = ($line -split ":",2)[1].Trim()
+                }
+                if ($line -like "*Last Run Time:*") {
+                    $lastRun = ($line -split ":",2)[1].Trim()
+                }
+            }
+            
+            # Check if task process is actually running
+            $isRunning = $false
+            $runningProcess = Get-NetTCPConnection -LocalPort $FrontendPort -ErrorAction SilentlyContinue | 
+                Where-Object { $_.State -eq "Listen" }
+            if ($runningProcess) {
+                $processId = $runningProcess.OwningProcess
+                $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                if ($process -and $process.ProcessName -eq "node") {
+                    $isRunning = $true
+                }
+            }
+            
+            return @{
+                Name = $TaskName
+                Status = $status
+                IsRunning = $isRunning
+                LastRun = $lastRun
+                NextRun = $nextRun
+            }
+        }
+    } catch {
+        Write-Debug "Error querying task: $($_.Exception.Message)"
     }
     return $null
 }
@@ -119,25 +168,26 @@ if ($backendService) {
     Write-Error "  Backend service '$BackendServiceName' not found!"
 }
 
-$frontendService = Get-ServiceDetails $FrontendServiceName
-if ($frontendService) {
-    Write-Host "  Frontend Service:" -ForegroundColor Green
-    Write-Host "    Name: $($frontendService.Name)"
-    Write-Host "    Status: $($frontendService.Status)"
-    Write-Host "    Start Type: $($frontendService.StartType)"
+$frontendTask = Get-TaskDetails $FrontendTaskName
+if ($frontendTask) {
+    Write-Host "  Frontend Task:" -ForegroundColor Green
+    Write-Host "    Name: $($frontendTask.Name)"
+    Write-Host "    Status: $($frontendTask.Status)"
+    Write-Host "    Process Running: $($frontendTask.IsRunning)"
+    Write-Host "    Last Run: $($frontendTask.LastRun)"
     
-    if ($frontendService.Status -ne "Running") {
-        Write-Warning "    ⚠️  Frontend service is not running!"
+    if (-not $frontendTask.IsRunning) {
+        Write-Warning "    ⚠️  Frontend task process is not running!"
         if ($FixIssues) {
-            Write-Host "    Attempting to start frontend service..." -ForegroundColor Yellow
-            Start-Service -Name $FrontendServiceName -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 3
-            $frontendService = Get-ServiceDetails $FrontendServiceName
-            Write-Host "    New Status: $($frontendService.Status)"
+            Write-Host "    Attempting to start frontend task..." -ForegroundColor Yellow
+            schtasks /run /tn $FrontendTaskName 2>$null | Out-Null
+            Start-Sleep -Seconds 5
+            $frontendTask = Get-TaskDetails $FrontendTaskName
+            Write-Host "    Process Running: $($frontendTask.IsRunning)"
         }
     }
 } else {
-    Write-Error "  Frontend service '$FrontendServiceName' not found!"
+    Write-Error "  Frontend task '$FrontendTaskName' not found!"
 }
 
 Write-Host ""
@@ -374,9 +424,9 @@ if ($backendService -and $backendService.Status -ne "Running") {
     $recommendations += "Start backend service: Start-Service -Name '$BackendServiceName'"
 }
 
-if ($frontendService -and $frontendService.Status -ne "Running") {
-    $issues += "Frontend service is not running"
-    $recommendations += "Start frontend service: Start-Service -Name '$FrontendServiceName'"
+if ($frontendTask -and -not $frontendTask.IsRunning) {
+    $issues += "Frontend task process is not running"
+    $recommendations += "Start frontend task: schtasks /run /tn '$FrontendTaskName'"
 }
 
 # Check port accessibility
@@ -423,6 +473,7 @@ if ($issues.Count -gt 0) {
 }
 
 Write-Host "Useful Commands:" -ForegroundColor Cyan
-Write-Host "  Check services: Get-Service '$BackendServiceName', '$FrontendServiceName'" 
+Write-Host "  Check backend service: Get-Service '$BackendServiceName'" 
+Write-Host "  Check frontend task: schtasks /query /tn '$FrontendTaskName' /fo LIST"
 Write-Host "  View logs: Get-Content '$LogDir\\*-stderr.log' -Tail 20"
 Write-Host "  Test endpoints: Invoke-WebRequest 'http://localhost:3000/health'"

@@ -1,12 +1,12 @@
-# ExcelAddin Deployment Guide (Vite + NSSM)
+# ExcelAddin Deployment Guide (Vite + Task Scheduler)
 
-This guide covers the deployment of the Excel Add-in using the new Vite-based build system with NSSM services on Windows Server 10.
+This guide covers the deployment of the Excel Add-in using the new Vite-based build system with Windows Task Scheduler for frontend and NSSM for backend services on Windows Server 10.
 
 ## Overview
 
 The Excel Add-in now uses:
 - **Build System**: Vite (replaced webpack)
-- **Frontend Hosting**: Express server via NSSM
+- **Frontend Hosting**: Express server via Windows Task Scheduler
 - **Backend Hosting**: Python Flask via NSSM  
 - **Reverse Proxy**: IIS on port 9443
 - **Target Platform**: Windows Server 10
@@ -17,8 +17,9 @@ The Excel Add-in now uses:
 - Windows Server 10
 - Node.js 18+ 
 - Python 3.8+
-- NSSM (Non-Sucking Service Manager)
+- NSSM (Non-Sucking Service Manager) - for backend only
 - IIS with URL Rewrite module
+- Windows Task Scheduler (built-in)
 
 ### 1. Complete Deployment (Recommended)
 ```powershell
@@ -61,7 +62,7 @@ Excel Client → IIS (9443) → Frontend Service (3000)
   - Technology: Python Flask
   - Endpoints: `/api/*`
 
-- **Frontend Service**: `ExcelAddin-Frontend` (NSSM)
+- **Frontend Task**: `ExcelAddin-Frontend` (Task Scheduler)
   - Port: 3000  
   - Technology: Express.js serving Vite build
   - Endpoints: `/excellence/*`, static files
@@ -114,41 +115,51 @@ npm run lint
 - `/manifest.xml` - Add-in manifest  
 - `/api/health` - Backend health check
 
-## NSSM Service Management
+## Service/Task Management
 
-### Service Commands
+### Frontend Task Commands
 ```powershell
-# Start services
+# Using the management script
+.\manage-frontend-task.ps1 -Action status
+.\manage-frontend-task.ps1 -Action start
+.\manage-frontend-task.ps1 -Action stop  
+.\manage-frontend-task.ps1 -Action restart
+
+# Direct Task Scheduler commands
+schtasks /run /tn ExcelAddin-Frontend      # Start
+schtasks /end /tn ExcelAddin-Frontend      # Stop
+schtasks /query /tn ExcelAddin-Frontend /fo LIST  # Status
+```
+
+### Backend Service Commands
+```powershell
+# Standard Windows service commands
 Start-Service ExcelAddin-Backend
-Start-Service ExcelAddin-Frontend
-
-# Stop services
-Stop-Service ExcelAddin-Backend  
-Stop-Service ExcelAddin-Frontend
-
-# Check status
-Get-Service ExcelAddin-*
+Stop-Service ExcelAddin-Backend
+Get-Service ExcelAddin-Backend
 
 # View logs
 Get-Content C:\Logs\ExcelAddin\*-stderr.log -Tail 20
 ```
 
-### Service Configuration
-- **Auto-start**: Services start with Windows
-- **Restart**: Automatic restart on failure
-- **Logging**: Stdout/stderr to C:\Logs\ExcelAddin\
-- **Environment**: Production settings via environment variables
+### Service/Task Configuration
+- **Backend Service (NSSM)**: Auto-start, automatic restart on failure, logging to C:\Logs\ExcelAddin\
+- **Frontend Task (Scheduler)**: Runs continuously, restarts on failure, auto-start on boot
+- **Environment**: Production settings via environment variables and task configuration
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Service won't start**
+1. **Task/Service won't start**
    ```powershell
    # Check prerequisites
    node --version  # Should be 18+
    python --version  # Should be 3.8+
-   nssm --version   # Should exist
+   nssm --version   # Should exist (backend only)
+   
+   # Check task status
+   .\manage-frontend-task.ps1 -Action status -Detailed
    
    # Check logs
    Get-Content C:\Logs\ExcelAddin\*-stderr.log -Tail 50
@@ -182,7 +193,7 @@ The debug script tests all critical endpoints:
 ```
 
 This will:
-- Check service status
+- Check backend service status and frontend task status
 - Test port connectivity  
 - Verify Excel-specific endpoints
 - Validate Office.js references
@@ -248,9 +259,13 @@ npm run build:prod
 
 ### Useful Commands
 ```powershell
-# Service management
-Get-Service ExcelAddin-* | Format-Table
-Restart-Service ExcelAddin-Frontend
+# Frontend task management
+.\manage-frontend-task.ps1 -Action status
+schtasks /query /tn ExcelAddin-Frontend /fo LIST
+
+# Backend service management
+Get-Service ExcelAddin-Backend | Format-Table
+Restart-Service ExcelAddin-Backend
 
 # IIS management  
 Get-Website ExcelAddin
@@ -262,8 +277,8 @@ Invoke-WebRequest http://localhost:5000/api/health
 ```
 
 ### Log Locations
-- Frontend: `C:\Logs\ExcelAddin\frontend-stderr.log`
+- Frontend: Console output via Task Scheduler (check Windows Event Viewer)
 - Backend: `C:\Logs\ExcelAddin\backend-stderr.log`
 - IIS: Windows Event Logs (System, Application)
 
-This deployment system provides a robust, maintainable foundation for the Excel Add-in with modern build tooling and comprehensive monitoring.
+This deployment system provides a robust, maintainable foundation for the Excel Add-in with modern build tooling, reliable Windows Task Scheduler frontend hosting, and comprehensive monitoring.

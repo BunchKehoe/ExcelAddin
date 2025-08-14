@@ -1,5 +1,5 @@
 # ExcelAddin Frontend Deployment Script  
-# Deploys Vite-built React frontend as NSSM service for Windows Server 10
+# Deploys Vite-built React frontend as Windows Task Scheduler task for Windows Server 10
 
 param(
     [switch]$Force,
@@ -10,10 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Service configuration
-$ServiceName = "ExcelAddin-Frontend"
-$ServiceDisplayName = "ExcelAddin Frontend Service"
-$ServiceDescription = "Excel Add-in Frontend Web Server (Vite)"
+# Task configuration
+$TaskName = "ExcelAddin-Frontend"
+$TaskDescription = "Excel Add-in Frontend Web Server (Vite)"
 $Port = 3000
 
 # Paths
@@ -121,7 +120,7 @@ process.on('SIGINT', () => {
 "@
 
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  ExcelAddin Frontend Deployment (NSSM)" -ForegroundColor Green  
+Write-Host "  ExcelAddin Frontend Deployment (Task Scheduler)" -ForegroundColor Green  
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
@@ -154,14 +153,13 @@ if ($npmCmd) {
 }
 Write-Host "  npm: Found" -ForegroundColor Green
 
-# Check NSSM
-$nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
-if ($nssmCmd) {
-    $nssmPath = $nssmCmd.Source
+# Check Task Scheduler (schtasks is built into Windows)
+$schtasksCmd = Get-Command schtasks -ErrorAction SilentlyContinue
+if ($schtasksCmd) {
+    Write-Host "  Task Scheduler: Available" -ForegroundColor Green
 } else {
-    Write-Error "NSSM not found. Please install NSSM and add to PATH."
+    Write-Error "Task Scheduler not available. This should be built into Windows."
 }
-Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
 
 Write-Host "  Prerequisites: OK" -ForegroundColor Green
 Write-Host ""
@@ -247,9 +245,9 @@ if ($existingProcess) {
     }
 }
 
-# Create Express server script for NSSM
+# Create Express server script for Task Scheduler
 $ServerScriptPath = Join-Path $ProjectRoot "server.js"
-Write-Host "Creating server script for NSSM..." -ForegroundColor Yellow
+Write-Host "Creating server script for Task Scheduler..." -ForegroundColor Yellow
 $ServerScript | Out-File -FilePath $ServerScriptPath -Encoding UTF8
 Write-Host "  Server script created: $ServerScriptPath" -ForegroundColor Green
 
@@ -266,111 +264,161 @@ if (-not $hasExpress) {
     }
 }
 
-# Stop and remove existing service
-$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($existingService) {
-    Write-Host "Stopping existing service..." -ForegroundColor Yellow
+# Stop and remove existing scheduled task
+Write-Host "Checking for existing scheduled task..." -ForegroundColor Yellow
+$existingTask = schtasks /query /tn $TaskName 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Stopping existing task..." -ForegroundColor Yellow
+    schtasks /end /tn $TaskName 2>$null | Out-Null
     
-    if ($existingService.Status -eq "Running") {
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-        
-        # Wait for service to fully stop with status checking
-        $timeout = 15
-        $elapsed = 0
-        do {
-            Start-Sleep -Seconds 2
-            $elapsed += 2
-            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-        } while ($service.Status -eq "Running" -and $elapsed -lt $timeout)
-        
-        if ($service.Status -eq "Running") {
-            Write-Warning "Service did not stop within $timeout seconds, forcing removal"
-        } else {
-            Write-Host "Service stopped successfully" -ForegroundColor Green
-        }
-    }
+    # Wait for task to stop
+    Start-Sleep -Seconds 5
     
-    Write-Host "Removing existing service..." -ForegroundColor Yellow
-    nssm remove $ServiceName confirm
-    Start-Sleep -Seconds 3
+    Write-Host "Removing existing task..." -ForegroundColor Yellow
+    schtasks /delete /tn $TaskName /f 2>$null | Out-Null
     
-    # Verify removal with retries
-    $timeout = 10
-    $elapsed = 0
-    do {
-        Start-Sleep -Seconds 1
-        $elapsed += 1
-        $checkService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    } while ($checkService -and $elapsed -lt $timeout)
-    
-    if ($checkService) {
-        Write-Error "Failed to remove existing service after $timeout seconds"
+    # Verify removal
+    Start-Sleep -Seconds 2
+    $checkTask = schtasks /query /tn $TaskName 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Warning "Task may still exist, continuing with installation..."
     } else {
-        Write-Host "Service removed successfully" -ForegroundColor Green
-    }
+        Write-Host "Task removed successfully" -ForegroundColor Green
     }
 }
 
-# Install new NSSM service
-Write-Host "Installing NSSM service..." -ForegroundColor Yellow
-nssm install $ServiceName $NodeExe $ServerScriptPath
+# Kill any existing node processes on our port to ensure clean start
+$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
+    Where-Object { $_.State -eq "Listen" }
+if ($existingProcess) {
+    $processId = $existingProcess.OwningProcess
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($process -and $process.ProcessName -eq "node") {
+        Write-Host "Stopping existing Node.js process on port $Port..." -ForegroundColor Yellow
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
+    }
+}
+
+# Create new scheduled task
+Write-Host "Creating scheduled task..." -ForegroundColor Yellow
+
+# Prepare environment variables
+$nodeEnv = if ($Environment -eq "development") { "development" } else { "production" }
+$envVars = "NODE_ENV=$nodeEnv;PORT=$Port;HOST=127.0.0.1"
+
+# Create task XML configuration
+$taskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>$TaskDescription</Description>
+    <Author>ExcelAddin Deployment</Author>
+  </RegistrationInfo>
+  <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>ServiceAccount</LogonType>
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>4</Priority>
+    <RestartOnFailure>
+      <Interval>PT5M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>$NodeExe</Command>
+      <Arguments>$ServerScriptPath</Arguments>
+      <WorkingDirectory>$ProjectRoot</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@
+
+# Save task XML to temporary file
+$taskXmlPath = Join-Path $env:TEMP "$TaskName.xml"
+$taskXml | Out-File -FilePath $taskXmlPath -Encoding UTF8
+
+# Create the scheduled task
+schtasks /create /tn $TaskName /xml $taskXmlPath /f
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item $taskXmlPath -ErrorAction SilentlyContinue
+    Write-Error "Failed to create scheduled task"
+}
+
+# Clean up temporary XML file
+Remove-Item $taskXmlPath -ErrorAction SilentlyContinue
+
+Write-Host "Scheduled task created successfully" -ForegroundColor Green
+
+# Start the scheduled task
+Write-Host "Starting scheduled task..." -ForegroundColor Yellow
+schtasks /run /tn $TaskName
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to install NSSM service"
+    Write-Error "Failed to start scheduled task"
 }
 
-# Configure service parameters
-Write-Host "Configuring service..." -ForegroundColor Yellow
-nssm set $ServiceName DisplayName $ServiceDisplayName
-nssm set $ServiceName Description $ServiceDescription
-nssm set $ServiceName AppDirectory $ProjectRoot
-nssm set $ServiceName Start SERVICE_AUTO_START
-
-# Set environment variables
-$nodeEnv = if ($Environment -eq "development") { "development" } else { "production" }
-nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=$nodeEnv;PORT=$Port;HOST=127.0.0.1"
-
-# Configure logging
-nssm set $ServiceName AppStdout "$LogDir\frontend-stdout.log"
-nssm set $ServiceName AppStderr "$LogDir\frontend-stderr.log" 
-nssm set $ServiceName AppStdoutCreationDisposition 4  # FILE_OPEN_ALWAYS
-nssm set $ServiceName AppStderrCreationDisposition 4  # FILE_OPEN_ALWAYS
-
-# Configure service restart behavior
-nssm set $ServiceName AppThrottle 1500
-nssm set $ServiceName AppRestartDelay 0
-nssm set $ServiceName AppStopMethodSkip 0
-nssm set $ServiceName AppExit Default Restart
-
-if ($Debug) {
-    Write-Host "Service configuration:" -ForegroundColor Cyan
-    nssm dump $ServiceName
-}
-
-# Start service
-Write-Host "Starting service..." -ForegroundColor Yellow
-Start-Service -Name $ServiceName
-
-# Wait for service to start with status checking
+# Wait for task to start and process to be running
 $timeout = 20
 $elapsed = 0
+$processStarted = $false
+
 do {
     Start-Sleep -Seconds 2
     $elapsed += 2
-    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-} while ((-not $service -or $service.Status -ne "Running") -and $elapsed -lt $timeout)
-
-# Verify service status
-if (-not $service -or $service.Status -ne "Running") {
-    Write-Error "Service failed to start within $timeout seconds. Check logs at: $LogDir"
-    if ($service) {
-        Write-Host "  Current Status: $($service.Status)" -ForegroundColor Red
+    
+    # Check if Node.js process is running on our port
+    $runningProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
+        Where-Object { $_.State -eq "Listen" }
+    
+    if ($runningProcess) {
+        $processId = $runningProcess.OwningProcess
+        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        if ($process -and $process.ProcessName -eq "node") {
+            $processStarted = $true
+        }
     }
+} while (-not $processStarted -and $elapsed -lt $timeout)
+
+if (-not $processStarted) {
+    Write-Error "Task failed to start Node.js process within $timeout seconds. Check logs at: $LogDir"
+    
+    # Show task status for debugging
+    Write-Host "Task Status:" -ForegroundColor Red
+    schtasks /query /tn $TaskName /fo LIST
     exit 1
 }
 
-Write-Host "Service started successfully!" -ForegroundColor Green
-Write-Host "  Status: $($service.Status)" -ForegroundColor Green
+Write-Host "Scheduled task started successfully!" -ForegroundColor Green
+Write-Host "  Process running on port: $Port" -ForegroundColor Green
 
 # Test connectivity
 Write-Host "Testing frontend connectivity..." -ForegroundColor Yellow
@@ -402,8 +450,8 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Frontend Deployment Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Service Details:" -ForegroundColor Cyan
-Write-Host "  Name: $ServiceName"
+Write-Host "Task Details:" -ForegroundColor Cyan
+Write-Host "  Name: $TaskName"
 Write-Host "  Port: $Port"  
 Write-Host "  Environment: $Environment"
 Write-Host "  Logs: $LogDir"
@@ -415,8 +463,9 @@ Write-Host "  Commands:      http://localhost:$Port/excellence/commands.html"
 Write-Host "  Functions:     http://localhost:$Port/functions.json"
 Write-Host ""
 Write-Host "Management Commands:" -ForegroundColor Cyan
-Write-Host "  Start:   Start-Service -Name '$ServiceName'"
-Write-Host "  Stop:    Stop-Service -Name '$ServiceName'"
-Write-Host "  Status:  Get-Service -Name '$ServiceName'" 
-Write-Host "  Logs:    Get-Content '$LogDir\frontend-stderr.log' -Tail 50"
+Write-Host "  Start:   schtasks /run /tn '$TaskName'"
+Write-Host "  Stop:    schtasks /end /tn '$TaskName'"
+Write-Host "  Status:  schtasks /query /tn '$TaskName' /fo LIST" 
+Write-Host "  Delete:  schtasks /delete /tn '$TaskName' /f"
+Write-Host "  Logs:    Check Windows Event Viewer or process output"
 Write-Host ""
