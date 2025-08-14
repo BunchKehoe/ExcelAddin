@@ -1,5 +1,5 @@
 # ExcelAddin Frontend Deployment Script  
-# Deploys Vite-built React frontend as Windows Task Scheduler task for Windows Server 10
+# Deploys Vite-built React frontend as Windows Service using node-windows
 
 param(
     [switch]$Force,
@@ -10,9 +10,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Task configuration
-$TaskName = "ExcelAddin-Frontend"
-$TaskDescription = "Excel Add-in Frontend Web Server (Vite)"
+# Service configuration
+$ServiceName = "ExcelAddin Frontend"
 $Port = 3000
 
 # Paths
@@ -26,101 +25,8 @@ if ($NodeCmd) {
     Write-Error "Node.js not found. Please install Node.js and add to PATH."
 }
 
-# Server script content for NSSM (Windows Server 10 compatible)
-$ServerScript = @"
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
-
-// Serve static files from dist directory
-app.use('/excellence', express.static(path.join(__dirname, 'dist')));
-
-// Serve manifest files and assets at root level too (for backward compatibility)
-app.use('/assets', express.static(path.join(__dirname, 'dist/assets')));
-app.get('/manifest*.xml', (req, res) => {
-    const manifestPath = path.join(__dirname, 'dist', req.path);
-    if (fs.existsSync(manifestPath)) {
-        res.setHeader('Content-Type', 'application/xml');
-        res.sendFile(manifestPath);
-    } else {
-        res.status(404).send('Manifest not found');
-    }
-});
-
-// Serve functions.json
-app.get('/functions.json', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist/functions.json'));
-});
-
-// Excel Add-in specific endpoints (required by Excel)
-app.get('/excellence/taskpane.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist/taskpane.html'));
-});
-
-app.get('/excellence/commands.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist/commands.html'));
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy', 
-        service: 'exceladdin-frontend',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'production'
-    });
-});
-
-// Fallback for any other Excel Add-in requests
-app.get('/excellence/*', (req, res) => {
-    const filePath = path.join(__dirname, 'dist', req.path.replace('/excellence/', ''));
-    if (fs.existsSync(filePath)) {
-        res.sendFile(filePath);
-    } else {
-        // For SPA routing, serve taskpane.html as fallback
-        res.sendFile(path.join(__dirname, 'dist/taskpane.html'));
-    }
-});
-
-// CORS headers for Excel Add-in compatibility
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'X-Requested-With, content-type, Authorization');
-    next();
-});
-
-// Start server
-const server = app.listen(PORT, HOST, () => {
-    console.log(`Excel Add-in Frontend Server running on http://$${HOST}:$${PORT}`);
-    console.log(`Environment: $${process.env.NODE_ENV || 'production'}`);
-    console.log(`Serving from: $${path.join(__dirname, 'dist')}`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('Frontend server stopped');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    server.close(() => {
-        console.log('Frontend server stopped');
-        process.exit(0);
-    });
-});
-"@
-
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  ExcelAddin Frontend Deployment (Task Scheduler)" -ForegroundColor Green  
+Write-Host "  ExcelAddin Frontend Deployment (node-windows)" -ForegroundColor Green  
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
@@ -132,6 +38,7 @@ if ($Environment -notin @("development", "staging", "production")) {
 Write-Host "Deployment Configuration:" -ForegroundColor Cyan
 Write-Host "  Environment: $Environment" -ForegroundColor Cyan
 Write-Host "  Port: $Port" -ForegroundColor Cyan
+Write-Host "  Service: $ServiceName" -ForegroundColor Cyan
 Write-Host ""
 
 # Check prerequisites  
@@ -153,14 +60,6 @@ if ($npmCmd) {
 }
 Write-Host "  npm: Found" -ForegroundColor Green
 
-# Check Task Scheduler (schtasks is built into Windows)
-$schtasksCmd = Get-Command schtasks -ErrorAction SilentlyContinue
-if ($schtasksCmd) {
-    Write-Host "  Task Scheduler: Available" -ForegroundColor Green
-} else {
-    Write-Error "Task Scheduler not available. This should be built into Windows."
-}
-
 Write-Host "  Prerequisites: OK" -ForegroundColor Green
 Write-Host ""
 
@@ -174,6 +73,14 @@ if (-not (Test-Path $ProjectRoot)) {
 
 if (-not (Test-Path (Join-Path $ProjectRoot "package.json"))) {
     Write-Error "package.json not found. Are you in the correct directory?"
+}
+
+if (-not (Test-Path (Join-Path $ProjectRoot "service.js"))) {
+    Write-Error "service.js not found. Service wrapper script is missing."
+}
+
+if (-not (Test-Path (Join-Path $ProjectRoot "server.js"))) {
+    Write-Error "server.js not found. Express server script is missing."
 }
 
 # Create log directory
@@ -230,7 +137,7 @@ if (-not $SkipBuild) {
 # Check if port is in use (skip our own service)
 $existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
     Where-Object { $_.State -eq "Listen" }
-if ($existingProcess) {
+if ($existingProcess -and -not $Force) {
     $processId = $existingProcess.OwningProcess
     $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
     if ($process) {
@@ -238,52 +145,54 @@ if ($existingProcess) {
     } else {
         $processName = "Unknown"
     }
-    if ($processName -ne "node" -and -not $Force) {
-        Write-Warning "Port $Port is in use by process: $processName (PID: $processId)"
-        Write-Warning "Use -Force to override or stop the conflicting process"
-        exit 1
-    }
+    Write-Warning "Port $Port is in use by process: $processName (PID: $processId)"
+    Write-Warning "Use -Force to override or stop the conflicting process first"
+    exit 1
 }
 
-# Create Express server script for Task Scheduler
-$ServerScriptPath = Join-Path $ProjectRoot "server.js"
-Write-Host "Creating server script for Task Scheduler..." -ForegroundColor Yellow
-$ServerScript | Out-File -FilePath $ServerScriptPath -Encoding UTF8
-Write-Host "  Server script created: $ServerScriptPath" -ForegroundColor Green
-
-# Check if Express is installed (required for server script)
-$packageJsonPath = Join-Path $ProjectRoot "package.json"
-$packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
-$hasExpress = $packageJson.dependencies.express -or $packageJson.devDependencies.express
-
-if (-not $hasExpress) {
-    Write-Host "Installing Express for server..." -ForegroundColor Yellow
-    npm install express --save
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to install Express"
-    }
-}
-
-# Stop and remove existing scheduled task
-Write-Host "Checking for existing scheduled task..." -ForegroundColor Yellow
-$existingTask = schtasks /query /tn $TaskName 2>$null
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "Stopping existing task..." -ForegroundColor Yellow
-    schtasks /end /tn $TaskName 2>$null | Out-Null
+# Stop and uninstall existing service if it exists
+Write-Host "Checking for existing Windows service..." -ForegroundColor Yellow
+$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($existingService) {
+    Write-Host "Stopping existing service..." -ForegroundColor Yellow
     
-    # Wait for task to stop
+    # Stop the service first
+    if ($existingService.Status -eq "Running") {
+        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        
+        # Wait for service to stop
+        $timeout = 30
+        $elapsed = 0
+        do {
+            Start-Sleep -Seconds 2
+            $elapsed += 2
+            $serviceStatus = (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue).Status
+        } while ($serviceStatus -eq "Running" -and $elapsed -lt $timeout)
+        
+        if ($serviceStatus -eq "Running") {
+            Write-Warning "Service did not stop within $timeout seconds, continuing..."
+        } else {
+            Write-Host "Service stopped successfully" -ForegroundColor Green
+        }
+    }
+    
+    # Uninstall the service using node-windows
+    Write-Host "Uninstalling existing service..." -ForegroundColor Yellow
+    $env:NODE_ENV = if ($Environment -eq "development") { "development" } else { "production" }
+    $env:PORT = $Port
+    $env:HOST = "127.0.0.1"
+    
+    node service.js uninstall
+    
+    # Wait for uninstall to complete
     Start-Sleep -Seconds 5
     
-    Write-Host "Removing existing task..." -ForegroundColor Yellow
-    schtasks /delete /tn $TaskName /f 2>$null | Out-Null
-    
     # Verify removal
-    Start-Sleep -Seconds 2
-    $checkTask = schtasks /query /tn $TaskName 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Warning "Task may still exist, continuing with installation..."
+    $serviceCheck = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($serviceCheck) {
+        Write-Warning "Service may still exist, continuing with installation..."
     } else {
-        Write-Host "Task removed successfully" -ForegroundColor Green
+        Write-Host "Service uninstalled successfully" -ForegroundColor Green
     }
 }
 
@@ -300,129 +209,70 @@ if ($existingProcess) {
     }
 }
 
-# Create new scheduled task
-Write-Host "Creating scheduled task..." -ForegroundColor Yellow
+# Install the Windows service using node-windows
+Write-Host "Installing Windows service using node-windows..." -ForegroundColor Yellow
 
-# Prepare environment variables
-$nodeEnv = if ($Environment -eq "development") { "development" } else { "production" }
-$envVars = "NODE_ENV=$nodeEnv;PORT=$Port;HOST=127.0.0.1"
+# Set environment variables for the service
+$env:NODE_ENV = if ($Environment -eq "development") { "development" } else { "production" }
+$env:PORT = $Port
+$env:HOST = "127.0.0.1"
 
-# Create task XML configuration
-$taskXml = @"
-<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Description>$TaskDescription</Description>
-    <Author>ExcelAddin Deployment</Author>
-  </RegistrationInfo>
-  <Triggers>
-    <BootTrigger>
-      <Enabled>true</Enabled>
-    </BootTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <LogonType>ServiceAccount</LogonType>
-      <UserId>S-1-5-18</UserId>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>false</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
-    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>4</Priority>
-    <RestartOnFailure>
-      <Interval>PT5M</Interval>
-      <Count>3</Count>
-    </RestartOnFailure>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>$NodeExe</Command>
-      <Arguments>$ServerScriptPath</Arguments>
-      <WorkingDirectory>$ProjectRoot</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>
-"@
-
-# Save task XML to temporary file
-$taskXmlPath = Join-Path $env:TEMP "$TaskName.xml"
-$taskXml | Out-File -FilePath $taskXmlPath -Encoding UTF8
-
-# Create the scheduled task
-schtasks /create /tn $TaskName /xml $taskXmlPath /f
-if ($LASTEXITCODE -ne 0) {
-    Remove-Item $taskXmlPath -ErrorAction SilentlyContinue
-    Write-Error "Failed to create scheduled task"
-}
-
-# Clean up temporary XML file
-Remove-Item $taskXmlPath -ErrorAction SilentlyContinue
-
-Write-Host "Scheduled task created successfully" -ForegroundColor Green
-
-# Start the scheduled task
-Write-Host "Starting scheduled task..." -ForegroundColor Yellow
-schtasks /run /tn $TaskName
+# Install the service
+node service.js install
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to start scheduled task"
+    Write-Error "Failed to install Windows service"
 }
 
-# Wait for task to start and process to be running
-$timeout = 20
+# Wait for installation to complete and service to start
+Write-Host "Waiting for service installation and startup..." -ForegroundColor Yellow
+$timeout = 60
 $elapsed = 0
-$processStarted = $false
+$serviceStarted = $false
 
 do {
-    Start-Sleep -Seconds 2
-    $elapsed += 2
+    Start-Sleep -Seconds 3
+    $elapsed += 3
     
-    # Check if Node.js process is running on our port
-    $runningProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
-        Where-Object { $_.State -eq "Listen" }
-    
-    if ($runningProcess) {
-        $processId = $runningProcess.OwningProcess
-        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-        if ($process -and $process.ProcessName -eq "node") {
-            $processStarted = $true
+    # Check if service exists and is running
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq "Running") {
+        # Also check if Node.js process is running on our port
+        $runningProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
+            Where-Object { $_.State -eq "Listen" }
+        
+        if ($runningProcess) {
+            $processId = $runningProcess.OwningProcess
+            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($process -and $process.ProcessName -eq "node") {
+                $serviceStarted = $true
+            }
         }
     }
-} while (-not $processStarted -and $elapsed -lt $timeout)
+} while (-not $serviceStarted -and $elapsed -lt $timeout)
 
-if (-not $processStarted) {
-    Write-Error "Task failed to start Node.js process within $timeout seconds. Check logs at: $LogDir"
+if (-not $serviceStarted) {
+    Write-Error "Service failed to start within $timeout seconds. Check Windows Event Log and service status."
     
-    # Show task status for debugging
-    Write-Host "Task Status:" -ForegroundColor Red
-    schtasks /query /tn $TaskName /fo LIST
+    # Show service status for debugging
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($service) {
+        Write-Host "Service Status: $($service.Status)" -ForegroundColor Red
+        Write-Host "Check Windows Event Viewer for detailed error messages" -ForegroundColor Yellow
+    } else {
+        Write-Host "Service not found after installation" -ForegroundColor Red
+    }
     exit 1
 }
 
-Write-Host "Scheduled task started successfully!" -ForegroundColor Green
+Write-Host "Windows service installed and started successfully!" -ForegroundColor Green
+$service = Get-Service -Name $ServiceName
+Write-Host "  Service Status: $($service.Status)" -ForegroundColor Green
 Write-Host "  Process running on port: $Port" -ForegroundColor Green
 
 # Test connectivity
 Write-Host "Testing frontend connectivity..." -ForegroundColor Yellow
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 5
 
 $testEndpoints = @(
     @{ Path = "/health"; Name = "Health Check" },
@@ -450,11 +300,11 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Frontend Deployment Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Task Details:" -ForegroundColor Cyan
-Write-Host "  Name: $TaskName"
+Write-Host "Service Details:" -ForegroundColor Cyan
+Write-Host "  Name: $ServiceName"
 Write-Host "  Port: $Port"  
 Write-Host "  Environment: $Environment"
-Write-Host "  Logs: $LogDir"
+Write-Host "  Status: $($service.Status)"
 Write-Host ""
 Write-Host "Access URLs:" -ForegroundColor Cyan
 Write-Host "  Health Check:  http://localhost:$Port/health"
@@ -462,10 +312,17 @@ Write-Host "  Taskpane:      http://localhost:$Port/excellence/taskpane.html"
 Write-Host "  Commands:      http://localhost:$Port/excellence/commands.html"
 Write-Host "  Functions:     http://localhost:$Port/functions.json"
 Write-Host ""
-Write-Host "Management Commands:" -ForegroundColor Cyan
-Write-Host "  Start:   schtasks /run /tn '$TaskName'"
-Write-Host "  Stop:    schtasks /end /tn '$TaskName'"
-Write-Host "  Status:  schtasks /query /tn '$TaskName' /fo LIST" 
-Write-Host "  Delete:  schtasks /delete /tn '$TaskName' /f"
-Write-Host "  Logs:    Check Windows Event Viewer or process output"
+Write-Host "Service Management:" -ForegroundColor Cyan
+Write-Host "  Windows Services:  services.msc -> '$ServiceName'"
+Write-Host "  Start Service:     Start-Service '$ServiceName'"
+Write-Host "  Stop Service:      Stop-Service '$ServiceName'"
+Write-Host "  Service Status:    Get-Service '$ServiceName'"
+Write-Host "  Restart:           Restart-Service '$ServiceName'"
+Write-Host ""
+Write-Host "Advanced Management:" -ForegroundColor Cyan
+Write-Host "  Install:           node service.js install"
+Write-Host "  Uninstall:         node service.js uninstall" 
+Write-Host "  Manual Start:      node service.js start"
+Write-Host "  Manual Stop:       node service.js stop"
+Write-Host "  Logs:              Windows Event Viewer -> Application Log"
 Write-Host ""

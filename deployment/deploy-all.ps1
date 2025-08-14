@@ -111,7 +111,7 @@ try {
     }
     
     if (-not $SkipFrontend) {
-        $frontendService = Get-Service "ExcelAddin-Frontend" -ErrorAction SilentlyContinue  
+        $frontendService = Get-Service "ExcelAddin Frontend" -ErrorAction SilentlyContinue  
         if ($frontendService) {
             Write-Host "  Frontend: $($frontendService.Status)" -ForegroundColor Green
         }
@@ -147,7 +147,7 @@ try {
     Write-Host "  1. Run debug script: .\debug-integration.ps1 -Detailed"
     Write-Host "  2. Check service logs: Get-Content 'C:\Logs\ExcelAddin\*-stderr.log' -Tail 50"
     Write-Host "  3. Check Windows Event Logs"
-    Write-Host "  4. Verify prerequisites (Node.js, Python, NSSM)"
+    Write-Host "  4. Verify prerequisites (Node.js, Python, NSSM for backend)"
     
     exit 1
 }
