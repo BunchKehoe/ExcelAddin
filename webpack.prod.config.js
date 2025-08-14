@@ -96,7 +96,8 @@ module.exports = (env, argv) => {
         patterns: [
           { 
             from: './src/commands/functions.json', 
-            to: 'functions.json' 
+            to: 'functions.json',
+            noErrorOnMissing: true
           },
           {
             from: './assets',

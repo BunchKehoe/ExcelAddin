@@ -60,10 +60,27 @@ if (-not (Test-Path "node_modules")) {
 
 # Build the frontend
 Write-Host "Building frontend for staging..." -ForegroundColor Yellow
+
+# First try the full build with custom functions
 npm run build:staging
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Frontend build failed"
-    exit 1
+    Write-Warning "Full build failed, attempting web-only build..."
+    
+    # Create fallback functions.json if it doesn't exist
+    if (-not (Test-Path "src\commands\functions.json")) {
+        Write-Host "Creating fallback functions.json..."
+        Copy-Item "src\commands\functions.json.fallback" "src\commands\functions.json"
+    }
+    
+    # Try web-only build
+    npm run build:web
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Both full build and web-only build failed"
+        exit 1
+    }
+    Write-Warning "Web-only build completed (Excel custom functions may not work)"
+} else {
+    Write-Success "Full build completed successfully"
 }
 
 # Verify build output
