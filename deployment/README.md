@@ -126,11 +126,11 @@ Get-Service "ExcelAddin Frontend"
 Restart-Service "ExcelAddin Frontend"
 
 # Advanced management using node-windows
-node service.js start
-node service.js stop
-node service.js restart
-node service.js install    # Reinstall service
-node service.js uninstall  # Remove service
+node service.cjs start
+node service.cjs stop
+node service.cjs restart
+node service.cjs install    # Reinstall service
+node service.cjs uninstall  # Remove service
 ```
 
 ### Backend Service Commands

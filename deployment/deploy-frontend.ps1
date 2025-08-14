@@ -75,12 +75,12 @@ if (-not (Test-Path (Join-Path $ProjectRoot "package.json"))) {
     Write-Error "package.json not found. Are you in the correct directory?"
 }
 
-if (-not (Test-Path (Join-Path $ProjectRoot "service.js"))) {
-    Write-Error "service.js not found. Service wrapper script is missing."
+if (-not (Test-Path (Join-Path $ProjectRoot "service.cjs"))) {
+    Write-Error "service.cjs not found. Service wrapper script is missing."
 }
 
-if (-not (Test-Path (Join-Path $ProjectRoot "server.js"))) {
-    Write-Error "server.js not found. Express server script is missing."
+if (-not (Test-Path (Join-Path $ProjectRoot "server.cjs"))) {
+    Write-Error "server.cjs not found. Express server script is missing."
 }
 
 # Create log directory
@@ -182,7 +182,7 @@ if ($existingService) {
     $env:PORT = $Port
     $env:HOST = "127.0.0.1"
     
-    node service.js uninstall
+    node service.cjs uninstall
     
     # Wait for uninstall to complete
     Start-Sleep -Seconds 5
@@ -218,7 +218,7 @@ $env:PORT = $Port
 $env:HOST = "127.0.0.1"
 
 # Install the service
-node service.js install
+node service.cjs install
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to install Windows service"
@@ -320,9 +320,9 @@ Write-Host "  Service Status:    Get-Service '$ServiceName'"
 Write-Host "  Restart:           Restart-Service '$ServiceName'"
 Write-Host ""
 Write-Host "Advanced Management:" -ForegroundColor Cyan
-Write-Host "  Install:           node service.js install"
-Write-Host "  Uninstall:         node service.js uninstall" 
-Write-Host "  Manual Start:      node service.js start"
-Write-Host "  Manual Stop:       node service.js stop"
+Write-Host "  Install:           node service.cjs install"
+Write-Host "  Uninstall:         node service.cjs uninstall" 
+Write-Host "  Manual Start:      node service.cjs start"
+Write-Host "  Manual Stop:       node service.cjs stop"
 Write-Host "  Logs:              Windows Event Viewer -> Application Log"
 Write-Host ""

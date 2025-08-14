@@ -5,7 +5,7 @@ const path = require('path');
 const svc = new Service({
   name: 'ExcelAddin Frontend',
   description: 'Excel Add-in Frontend Web Server (Vite + Express)',
-  script: path.join(__dirname, 'server.js'),
+  script: path.join(__dirname, 'server.cjs'),
   nodeOptions: [
     '--max_old_space_size=4096'
   ],
