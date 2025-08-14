@@ -97,9 +97,9 @@ app.use((req, res, next) => {
 
 // Start server
 const server = app.listen(PORT, HOST, () => {
-    console.log(`Excel Add-in Frontend Server running on http://{HOST}:{PORT}`);
-    console.log(`Environment: {process.env.NODE_ENV || 'production'}`);
-    console.log(`Serving from: {path.join(__dirname, 'dist')}`);
+    console.log(`Excel Add-in Frontend Server running on http://$${HOST}:$${PORT}`);
+    console.log(`Environment: $${process.env.NODE_ENV || 'production'}`);
+    console.log(`Serving from: $${path.join(__dirname, 'dist')}`);
 });
 
 // Graceful shutdown
