@@ -44,7 +44,39 @@ def create_app() -> Flask:
         """Health check endpoint."""
         return jsonify({
             'status': 'healthy',
-            'message': 'Excel Backend API is running'
+            'message': 'Excel Backend API is running',
+            'environment': AppConfig.ENVIRONMENT,
+            'cors_origins': AppConfig.CORS_ORIGINS,
+            'nifi_endpoint': AppConfig.NIFI_ENDPOINT,
+            'debug_mode': AppConfig.DEBUG
+        })
+    
+    # Debug endpoint for connectivity testing
+    @app.route('/api/debug', methods=['GET'])
+    def debug_info():
+        """Debug endpoint to check backend configuration."""
+        return jsonify({
+            'status': 'debug',
+            'environment': AppConfig.ENVIRONMENT,
+            'host': AppConfig.HOST,
+            'port': AppConfig.PORT,
+            'cors_origins': AppConfig.CORS_ORIGINS,
+            'nifi_endpoint': AppConfig.NIFI_ENDPOINT,
+            'nifi_verify_ssl': AppConfig.NIFI_VERIFY_SSL,
+            'debug_mode': AppConfig.DEBUG,
+            'endpoints': [
+                '/api/health',
+                '/api/debug',
+                '/api/raw-data/categories',
+                '/api/raw-data/funds/<catalog>',
+                '/api/raw-data/download',
+                '/api/market-data/securities',
+                '/api/market-data/fields/<security>',
+                '/api/market-data/download',
+                '/api/data-upload/upload',
+                '/api/data-upload/types',
+                '/api/data-upload/status/<upload_id>'
+            ]
         })
     
     # Root endpoint

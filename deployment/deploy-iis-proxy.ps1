@@ -309,9 +309,22 @@ try {
           </serverVariables>
         </rule>
         
-        <!-- Backend API Routes -->
+        <!-- Backend API Routes (direct) -->
         <rule name="Backend API" stopProcessing="true">
           <match url="^api/(.*)" />
+          <conditions>
+            <add input="{REQUEST_METHOD}" pattern="OPTIONS" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="$BackendUrl/api/{R:1}" />
+          <serverVariables>
+            <set name="HTTP_X_FORWARDED_HOST" value="{HTTP_HOST}" />
+            <set name="HTTP_X_FORWARDED_PROTO" value="{HTTPS}" />
+          </serverVariables>
+        </rule>
+        
+        <!-- Backend API Routes (via excellence path - for backward compatibility) -->
+        <rule name="Backend API Excellence" stopProcessing="true">
+          <match url="^excellence/backend/api/(.*)" />
           <conditions>
             <add input="{REQUEST_METHOD}" pattern="OPTIONS" negate="true" />
           </conditions>

@@ -54,23 +54,23 @@ function getEnvironmentConfig(): EnvironmentConfig {
         apiBaseUrl: 'http://localhost:5000/api',
         environment: 'development',
         manifestUrl: 'https://localhost:3000/manifest.xml',
-        assetBaseUrl: 'https://localhost:3000/assets'
+        assetBaseUrl: '/assets'
       };
       
     case 'staging':
       return {
-        apiBaseUrl: 'https://server-vs81t.intranet.local:9443/excellence/backend/api',
+        apiBaseUrl: 'https://server-vs81t.intranet.local:9443/api',
         environment: 'staging',
-        manifestUrl: 'https://server-vs81t.intranet.local:9443/excellence/manifest.xml',
-        assetBaseUrl: 'https://server-vs81t.intranet.local:9443/excellence/assets'
+        manifestUrl: 'https://server-vs81t.intranet.local:9443/manifest-staging.xml',
+        assetBaseUrl: '/excellence/assets'
       };
       
     case 'production':
       return {
-        apiBaseUrl: 'https://server-vs84.intranet.local:9443/excellence/backend/api',
+        apiBaseUrl: 'https://server-vs84.intranet.local:9443/api',
         environment: 'production',
-        manifestUrl: 'https://server-vs84.intranet.local:9443/excellence/manifest.xml',
-        assetBaseUrl: 'https://server-vs84.intranet.local:9443/excellence/assets'
+        manifestUrl: 'https://server-vs84.intranet.local:9443/manifest-prod.xml',
+        assetBaseUrl: '/excellence/assets'
       };
       
     default:
