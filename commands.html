@@ -4,12 +4,19 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>PrimeExcelence</title>
+    <title>PrimeExcelence Commands</title>
     
     <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
 </head>
 <body>
-    <div id="container"></div>
+    <!-- Vite will inject the commands script here -->
+    <script type="module" src="./src/commands/commands.ts"></script>
+    <script>
+        Office.onReady(function () {
+            // Custom functions runtime environment is ready
+            console.log("Office.js is ready for custom functions");
+        });
+    </script>
 </body>
 </html>

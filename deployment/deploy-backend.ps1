@@ -1,230 +1,277 @@
 # ExcelAddin Backend Deployment Script
-# Deploys Python Flask backend as NSSM service
+# Deploys Python Flask backend as NSSM service for Windows Server 10
 
 param(
-    [switch]$Force,      # Kept for compatibility but not required for overwriting services
-    [switch]$SkipInstall
+    [switch]$Force,
+    [switch]$SkipInstall,
+    [switch]$Debug,
+    [string]$Environment = "staging"
 )
 
-# Import common functions
-. (Join-Path $PSScriptRoot "scripts" | Join-Path -ChildPath "common.ps1")
+$ErrorActionPreference = "Stop"
 
+# Validate environment parameter
+if ($Environment -notin @("development", "staging", "production")) {
+    Write-Error "Invalid environment '$Environment'. Must be one of: development, staging, production"
+}
+
+# Service configuration
 $ServiceName = "ExcelAddin-Backend"
 $ServiceDisplayName = "ExcelAddin Backend Service"
 $ServiceDescription = "Excel Add-in Backend API Service"
+$Port = 5000
 
-Write-Header "ExcelAddin Backend Deployment"
+# Paths
+$ProjectRoot = Split-Path $PSScriptRoot -Parent
+$BackendPath = Join-Path $ProjectRoot "backend"
+$ServiceScript = Join-Path $BackendPath "run.py"
+$LogDir = "C:\Logs\ExcelAddin"
+
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  ExcelAddin Backend Deployment (NSSM)" -ForegroundColor Green  
+Write-Host "  Environment: $Environment" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ""
 
 # Check prerequisites
-if (-not (Test-Prerequisites -SkipPM2 -SkipNSSM:$false)) {
-    Write-Error "Prerequisites check failed. Please resolve issues before continuing."
-    exit 1
+Write-Host "Checking prerequisites..." -ForegroundColor Yellow
+
+# Check Python
+$pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+if ($pythonCmd) {
+    $pythonPath = $pythonCmd.Source
+} else {
+    Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
 }
+$pythonVersion = python --version 2>&1
+Write-Host "  Python: $pythonVersion" -ForegroundColor Green
 
-# Get paths
-$ProjectRoot = Get-ProjectRoot
-$BackendPath = Get-BackendPath
-$ServiceScript = Join-Path $BackendPath "run.py"
+# Check NSSM
+$nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
+if ($nssmCmd) {
+    $nssmPath = $nssmCmd.Source
+} else {
+    Write-Error "NSSM not found. Please install NSSM and add to PATH."
+}
+Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
 
-Write-Host "Project Root: $ProjectRoot"
-Write-Host "Backend Path: $BackendPath"
+# Verify paths
+Write-Host "Verifying paths..." -ForegroundColor Yellow
+Write-Host "  Project Root: $ProjectRoot"
+Write-Host "  Backend Path: $BackendPath"
 
-# Verify backend directory exists
 if (-not (Test-Path $BackendPath)) {
     Write-Error "Backend directory not found: $BackendPath"
+}
+
+if (-not (Test-Path $ServiceScript)) {
+    Write-Error "Service script not found: $ServiceScript"
+}
+
+Write-Host "  Service Script: $ServiceScript" -ForegroundColor Green
+
+# Handle environment file configuration
+Write-Host "Configuring environment..." -ForegroundColor Yellow
+$envSourceFile = Join-Path $BackendPath ".env.$Environment"
+$envTargetFile = Join-Path $BackendPath ".env"
+
+if (Test-Path $envSourceFile) {
+    Write-Host "  Copying $envSourceFile to $envTargetFile" -ForegroundColor Green
+    Copy-Item $envSourceFile $envTargetFile -Force
+} else {
+    Write-Warning "  Environment file not found: $envSourceFile"
+    Write-Warning "  Backend may not have correct environment configuration"
+}
+
+# Create log directory
+if (-not (Test-Path $LogDir)) {
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    Write-Host "  Created log directory: $LogDir" -ForegroundColor Green
+} else {
+    Write-Host "  Log directory exists: $LogDir" -ForegroundColor Green
+}
+
+# Check if port is in use (skip backend itself)
+$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
+    Where-Object { $_.State -eq "Listen" }
+if ($existingProcess) {
+    $processId = $existingProcess.OwningProcess
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($process) {
+        $processName = $process.ProcessName
+    } else {
+        $processName = "Unknown"
+    }
+    if ($processName -ne "python" -and -not $Force) {
+        Write-Warning "Port $Port is in use by process: $processName (PID: $processId)"
+        Write-Warning "Use -Force to override"
+        exit 1
+    }
+}
+
+# Stop and remove existing service
+$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($existingService) {
+    Write-Host "Stopping existing service..." -ForegroundColor Yellow
+    
+    if ($existingService.Status -eq "Running") {
+        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        
+        # Wait for service to fully stop with status checking
+        $timeout = 15
+        $elapsed = 0
+        do {
+            Start-Sleep -Seconds 2
+            $elapsed += 2
+            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        } while ($service.Status -eq "Running" -and $elapsed -lt $timeout)
+        
+        if ($service.Status -eq "Running") {
+            Write-Warning "Service did not stop within $timeout seconds, forcing removal"
+        } else {
+            Write-Host "Service stopped successfully" -ForegroundColor Green
+        }
+    }
+    
+    Write-Host "Removing existing service..." -ForegroundColor Yellow
+    nssm remove $ServiceName confirm
+    Start-Sleep -Seconds 3
+    
+    # Verify removal with retries
+    $timeout = 10
+    $elapsed = 0
+    do {
+        Start-Sleep -Seconds 1
+        $elapsed += 1
+        $checkService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    } while ($checkService -and $elapsed -lt $timeout)
+    
+    if ($checkService) {
+        Write-Error "Failed to remove existing service after $timeout seconds"
+    } else {
+        Write-Host "Service removed successfully" -ForegroundColor Green
+    }
+}
+
+# Install dependencies if not skipping
+if (-not $SkipInstall) {
+    Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
+    Set-Location $BackendPath
+    
+    # Check for Poetry first (preferred), then pip
+    $poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
+    if ($poetryCmd) {
+        $poetryPath = $poetryCmd.Source
+        Write-Host "  Using Poetry for dependency management" -ForegroundColor Green
+        poetry install
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Poetry install failed"
+        }
+    } else {
+        Write-Host "  Using pip for dependency management" -ForegroundColor Yellow
+        if (Test-Path "requirements.txt") {
+            pip install -r requirements.txt
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "pip install failed"
+            }
+        } else {
+            Write-Warning "No requirements.txt found, skipping dependency install"
+        }
+    }
+}
+
+# Install new service
+Write-Host "Installing NSSM service..." -ForegroundColor Yellow
+nssm install $ServiceName $pythonPath $ServiceScript
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to install NSSM service"
+}
+
+# Configure service parameters
+Write-Host "Configuring service..." -ForegroundColor Yellow
+nssm set $ServiceName DisplayName $ServiceDisplayName
+nssm set $ServiceName Description $ServiceDescription  
+nssm set $ServiceName AppDirectory $BackendPath
+nssm set $ServiceName Start SERVICE_AUTO_START
+
+# Set environment variables
+nssm set $ServiceName AppEnvironmentExtra "FLASK_ENV=$Environment;PORT=$Port;HOST=127.0.0.1;ENVIRONMENT=$Environment"
+
+# Configure logging
+nssm set $ServiceName AppStdout "$LogDir\backend-stdout.log"
+nssm set $ServiceName AppStderr "$LogDir\backend-stderr.log"
+nssm set $ServiceName AppStdoutCreationDisposition 4  # FILE_OPEN_ALWAYS
+nssm set $ServiceName AppStderrCreationDisposition 4  # FILE_OPEN_ALWAYS
+
+# Configure service restart behavior
+nssm set $ServiceName AppThrottle 1500
+nssm set $ServiceName AppRestartDelay 0
+nssm set $ServiceName AppStopMethodSkip 0
+nssm set $ServiceName AppExit Default Restart
+
+if ($Debug) {
+    Write-Host "Service configuration:" -ForegroundColor Cyan
+    nssm dump $ServiceName
+}
+
+# Start service
+Write-Host "Starting service..." -ForegroundColor Yellow
+Start-Service -Name $ServiceName
+
+# Wait for service to start with status checking
+$timeout = 20
+$elapsed = 0
+do {
+    Start-Sleep -Seconds 2
+    $elapsed += 2
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+} while ((-not $service -or $service.Status -ne "Running") -and $elapsed -lt $timeout)
+
+# Verify service status
+if (-not $service -or $service.Status -ne "Running") {
+    Write-Error "Service failed to start within $timeout seconds. Check logs at: $LogDir"
+    if ($service) {
+        Write-Host "  Current Status: $($service.Status)" -ForegroundColor Red
+    }
     exit 1
 }
 
-# Navigate to backend directory
-Push-Location $BackendPath
+Write-Host "Service started successfully!" -ForegroundColor Green
+Write-Host "  Status: $($service.Status)" -ForegroundColor Green
+
+# Test connectivity
+Write-Host "Testing backend connectivity..." -ForegroundColor Yellow
+Start-Sleep -Seconds 2
 
 try {
-    # Install Python dependencies
-    Write-Header "Installing Python Dependencies"
-    
-    if (Test-Path "pyproject.toml") {
-        if (Test-Command "poetry") {
-            Write-Host "Installing dependencies with Poetry..."
-            poetry install
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "Poetry install failed"
-                exit 1
-            }
-        } else {
-            Write-Warning "Poetry not found. Attempting pip install..."
-            if (Test-Path "requirements.txt") {
-                pip install -r requirements.txt
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Error "Pip install failed"
-                    exit 1
-                }
-            } else {
-                Write-Error "Neither Poetry nor requirements.txt found"
-                exit 1
-            }
+    $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/health" -TimeoutSec 10 -ErrorAction SilentlyContinue
+    if ($response) {
+        Write-Host "  Backend health check: PASSED" -ForegroundColor Green
+        if ($Debug) {
+            Write-Host "  Response: $($response | ConvertTo-Json -Compress)" -ForegroundColor Cyan
         }
     } else {
-        Write-Error "No pyproject.toml found in backend directory"
-        exit 1
+        Write-Warning "  Backend health check: No response"
     }
-    
-    # Setup environment file
-    Write-Header "Configuring Environment"
-    
-    $envFile = Join-Path $BackendPath ".env"
-    $stagingEnvFile = Join-Path $BackendPath ".env.staging"
-    
-    if (-not (Test-Path $envFile) -and (Test-Path $stagingEnvFile)) {
-        Copy-Item $stagingEnvFile $envFile
-        Write-Success "Copied staging environment configuration"
-    } elseif (Test-Path $envFile) {
-        Write-Success "Environment file already exists"
-    } else {
-        Write-Error "No environment configuration found"
-        exit 1
-    }
-    
-    # Test backend application
-    Write-Header "Testing Backend Application"
-    
-    Write-Host "Starting backend test..."
-    $testProcess = Start-Process -FilePath "python" -ArgumentList "run.py" -PassThru -NoNewWindow
-    Start-Sleep -Seconds 5
-    
-    if ($testProcess -and -not $testProcess.HasExited) {
-        Write-Host "Testing health endpoint..."
-        try {
-            $response = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/health" -TimeoutSec 10
-            Write-Success "Backend health check passed: $($response.status)"
-        } catch {
-            Write-Warning "Health check failed, but continuing deployment: $($_.Exception.Message)"
-        }
-        
-        # Stop test process
-        Stop-Process -Id $testProcess.Id -Force
-        Start-Sleep -Seconds 2
-    } else {
-        Write-Error "Backend failed to start during test"
-        exit 1
-    }
-    
-    # Configure NSSM service
-    if (-not $SkipInstall) {
-        Write-Header "Configuring NSSM Service"
-        
-        # Remove existing service if it exists (always overwrite by default)
-        $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-        if ($existingService) {
-            Write-Host "Existing service detected. Stopping and removing service: $ServiceName"
-            Stop-ServiceSafely -ServiceName $ServiceName
-            nssm remove $ServiceName confirm
-            Start-Sleep -Seconds 2
-            Write-Success "Existing service removed successfully"
-        }
-        
-        # Install NSSM service
-        Write-Host "Installing NSSM service..."
-        
-        # Get Python executable path with better error handling
-        try {
-            $pythonCmd = Get-Command python -ErrorAction Stop
-            $pythonPath = $pythonCmd.Source
-            Write-Host "Using Python executable: $pythonPath"
-        } catch {
-            Write-Error "Python executable not found in PATH. Please ensure Python is installed and accessible."
-            exit 1
-        }
-        
-        # Verify Python executable works
-        try {
-            $pythonVersion = & $pythonPath --version 2>&1
-            Write-Host "Python version: $pythonVersion"
-        } catch {
-            Write-Error "Python executable is not working properly: $($_.Exception.Message)"
-            exit 1
-        }
-        
-        # Verify service script exists
-        if (-not (Test-Path $ServiceScript)) {
-            Write-Error "Service script not found: $ServiceScript"
-            exit 1
-        }
-        Write-Host "Using service script: $ServiceScript"
-        
-        nssm install $ServiceName $pythonPath $ServiceScript
-        
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to install NSSM service"
-            exit 1
-        }
-        
-        # Configure service parameters
-        nssm set $ServiceName DisplayName $ServiceDisplayName
-        nssm set $ServiceName Description $ServiceDescription
-        nssm set $ServiceName AppDirectory $BackendPath
-        nssm set $ServiceName Start SERVICE_AUTO_START
-        
-        # Configure logging
-        $logDir = "C:\Logs\ExcelAddin"
-        if (-not (Test-Path $logDir)) {
-            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-        }
-        
-        nssm set $ServiceName AppStdout "$logDir\backend-stdout.log"
-        nssm set $ServiceName AppStderr "$logDir\backend-stderr.log"
-        nssm set $ServiceName AppRotateFiles 1
-        nssm set $ServiceName AppRotateOnline 1
-        nssm set $ServiceName AppRotateSeconds 86400
-        nssm set $ServiceName AppRotateBytes 10485760
-        
-        # Set environment variables
-        nssm set $ServiceName AppEnvironmentExtra ENVIRONMENT=staging PYTHONPATH=$BackendPath
-        
-        Write-Success "NSSM service configured successfully"
-    }
-    
-    # Start the service
-    Write-Header "Starting Backend Service"
-    
-    try {
-        Start-Service -Name $ServiceName
-        Start-Sleep -Seconds 5
-        
-        $service = Get-Service -Name $ServiceName
-        if ($service.Status -eq "Running") {
-            Write-Success "Backend service started successfully"
-            
-            # Verify service is responding
-            Start-Sleep -Seconds 5
-            try {
-                $response = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/health" -TimeoutSec 10
-                Write-Success "Backend service is responding: $($response.status)"
-            } catch {
-                Write-Warning "Backend service is running but not responding to health check"
-            }
-        } else {
-            Write-Error "Backend service failed to start"
-            exit 1
-        }
-    } catch {
-        Write-Error "Failed to start backend service: $($_.Exception.Message)"
-        exit 1
-    }
-    
-    Write-Header "Backend Deployment Complete"
-    Write-Success "ExcelAddin Backend has been deployed successfully"
-    Write-Host ""
-    Write-Host "Service Information:"
-    Write-Host "  Name: $ServiceName"
-    Write-Host "  Display Name: $ServiceDisplayName"
-    Write-Host "  Status: Running"
-    Write-Host "  Health Check: http://127.0.0.1:5000/api/health"
-    Write-Host ""
-
 } catch {
-    Write-Error "Deployment failed: $($_.Exception.Message)"
-    Write-Host $_.ScriptStackTrace
-    exit 1
-} finally {
-    Pop-Location
+    Write-Warning "  Backend health check: FAILED - $($_.Exception.Message)"
+    Write-Host "  Check service logs: $LogDir\backend-stderr.log" -ForegroundColor Yellow
 }
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  Backend Deployment Complete!" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "Service Details:" -ForegroundColor Cyan
+Write-Host "  Name: $ServiceName"
+Write-Host "  Port: $Port"
+Write-Host "  Logs: $LogDir"
+Write-Host ""
+Write-Host "Management Commands:" -ForegroundColor Cyan
+Write-Host "  Start:   Start-Service -Name '$ServiceName'"
+Write-Host "  Stop:    Stop-Service -Name '$ServiceName'"  
+Write-Host "  Status:  Get-Service -Name '$ServiceName'"
+Write-Host "  Logs:    Get-Content '$LogDir\backend-stderr.log' -Tail 50"
+Write-Host ""

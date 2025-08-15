@@ -1,0 +1,47 @@
+{
+    "allowCustomDataForDataTypeAny": true,
+    "functions": [
+        {
+            "description": "Calculates aggregate IRR by dividing expected future value by original beginning value",
+            "id": "AGGIRR",
+            "name": "AGGIRR",
+            "parameters": [
+                {
+                    "description": "The expected future value",
+                    "name": "expectedFutureValue",
+                    "type": "number"
+                },
+                {
+                    "description": "The original beginning value",
+                    "name": "originalBeginningValue",
+                    "type": "number"
+                }
+            ],
+            "result": {
+                "type": "number"
+            }
+        },
+        {
+            "description": "Joins cells from a range into a single string with specified delimiter",
+            "id": "JOINCELLS",
+            "name": "JOINCELLS",
+            "parameters": [
+                {
+                    "description": "The range of cells to join",
+                    "dimensionality": "matrix",
+                    "name": "range",
+                    "type": "any"
+                },
+                {
+                    "description": "The delimiter to use (default comma)",
+                    "name": "delimiter",
+                    "optional": true,
+                    "type": "string"
+                }
+            ],
+            "result": {
+                "type": "string"
+            }
+        }
+    ]
+}
