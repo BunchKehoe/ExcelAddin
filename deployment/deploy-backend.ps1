@@ -4,10 +4,16 @@
 param(
     [switch]$Force,
     [switch]$SkipInstall,
-    [switch]$Debug
+    [switch]$Debug,
+    [string]$Environment = "staging"
 )
 
 $ErrorActionPreference = "Stop"
+
+# Validate environment parameter
+if ($Environment -notin @("development", "staging", "production")) {
+    Write-Error "Invalid environment '$Environment'. Must be one of: development, staging, production"
+}
 
 # Service configuration
 $ServiceName = "ExcelAddin-Backend"
@@ -23,6 +29,7 @@ $LogDir = "C:\Logs\ExcelAddin"
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  ExcelAddin Backend Deployment (NSSM)" -ForegroundColor Green  
+Write-Host "  Environment: $Environment" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
@@ -62,6 +69,19 @@ if (-not (Test-Path $ServiceScript)) {
 }
 
 Write-Host "  Service Script: $ServiceScript" -ForegroundColor Green
+
+# Handle environment file configuration
+Write-Host "Configuring environment..." -ForegroundColor Yellow
+$envSourceFile = Join-Path $BackendPath ".env.$Environment"
+$envTargetFile = Join-Path $BackendPath ".env"
+
+if (Test-Path $envSourceFile) {
+    Write-Host "  Copying $envSourceFile to $envTargetFile" -ForegroundColor Green
+    Copy-Item $envSourceFile $envTargetFile -Force
+} else {
+    Write-Warning "  Environment file not found: $envSourceFile"
+    Write-Warning "  Backend may not have correct environment configuration"
+}
 
 # Create log directory
 if (-not (Test-Path $LogDir)) {
@@ -176,7 +196,7 @@ nssm set $ServiceName AppDirectory $BackendPath
 nssm set $ServiceName Start SERVICE_AUTO_START
 
 # Set environment variables
-nssm set $ServiceName AppEnvironmentExtra "FLASK_ENV=production;PORT=$Port;HOST=127.0.0.1"
+nssm set $ServiceName AppEnvironmentExtra "FLASK_ENV=$Environment;PORT=$Port;HOST=127.0.0.1;ENVIRONMENT=$Environment"
 
 # Configure logging
 nssm set $ServiceName AppStdout "$LogDir\backend-stdout.log"

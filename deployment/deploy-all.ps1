@@ -45,6 +45,7 @@ try {
         Write-Host ""
         
         $backendParams = @{
+            Environment = $Environment
             Force = $Force
             Debug = $Debug
         }

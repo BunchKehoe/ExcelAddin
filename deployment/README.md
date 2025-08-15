@@ -30,13 +30,13 @@ cd deployment
 
 ### 2. Individual Service Deployment
 ```powershell
-# Backend only
-.\deploy-backend.ps1
+# Backend with environment support
+.\deploy-backend.ps1 -Environment staging
 
-# Frontend only  
+# Frontend with environment support  
 .\deploy-frontend.ps1 -Environment staging
 
-# IIS Proxy only
+# IIS Proxy 
 .\deploy-iis-proxy.ps1
 
 # IIS configuration (legacy)
@@ -176,9 +176,9 @@ Get-Content C:\Logs\ExcelAddin\*-stderr.log -Tail 20
 ```
 
 ### Service Configuration
-- **Backend Service (NSSM)**: Auto-start, automatic restart on failure, logging to C:\Logs\ExcelAddin\
-- **Frontend Service (node-windows)**: Auto-start Windows service, automatic restart on failure, logs to Windows Event Log
-- **Environment**: Production settings via environment variables and service configuration
+- **Backend Service (NSSM)**: Auto-start, automatic restart on failure, environment-aware configuration (development/staging/production), logging to C:\Logs\ExcelAddin\
+- **Frontend Service (node-windows)**: Auto-start Windows service, automatic restart on failure, environment-aware configuration, logs to Windows Event Log
+- **Environment Support**: Both services now support environment-specific configuration files (.env.development, .env.staging, .env.production)
 
 ## Troubleshooting
 
