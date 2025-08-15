@@ -85,6 +85,9 @@ class DatabaseConfig:
 class AppConfig:
     """Application configuration."""
     
+    # Environment detection
+    ENVIRONMENT = detect_backend_environment()
+    
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     HOST = os.getenv('HOST', '0.0.0.0')
     PORT = int(os.getenv('PORT', '5000'))
