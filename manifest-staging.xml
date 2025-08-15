@@ -25,8 +25,8 @@ Update the domain names and GUID before deployment.
   <Description DefaultValue="Excel Add-in for financial data management - Prime Capital Advisory Group - Staging Environment"/>
   
   <!-- Icons -->
-  <IconUrl DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/PCAG_trans_32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/PCAG_trans_80.png"/>
+  <IconUrl DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/images/logos/PCAG_trans_32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/images/logos/PCAG_trans_80.png"/>
   
   <!-- Support and help URLs -->
   <SupportUrl DefaultValue="https://your-company.com/support"/>
@@ -112,9 +112,9 @@ Update the domain names and GUID before deployment.
     <!-- Resources -->
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/PCAG_trans_16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/PCAG_trans_32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/PCAG_trans_80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/images/logos/PCAG_trans_16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/images/logos/PCAG_trans_32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/assets/images/logos/PCAG_trans_80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs81t.intranet.local:9443/excellence"/>
