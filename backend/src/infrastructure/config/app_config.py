@@ -88,6 +88,7 @@ class AppConfig:
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
     HOST = os.getenv('HOST', '0.0.0.0')
     PORT = int(os.getenv('PORT', '5000'))
+    ENVIRONMENT = detect_backend_environment()
     
     # CORS settings
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')

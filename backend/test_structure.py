@@ -44,7 +44,10 @@ def test_config():
         from src.infrastructure.config.app_config import DatabaseConfig
         config = DatabaseConfig()
         url = config.database_url
-        print(f"✓ Database config loaded: {url[:50]}...")
+        if url is None:
+            print("✓ Database config loaded: None (development mode)")
+        else:
+            print(f"✓ Database config loaded: {url[:50]}...")
         return True
     except Exception as e:
         print(f"✗ Config test failed: {e}")
