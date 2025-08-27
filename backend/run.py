@@ -1,5 +1,5 @@
 """
-Simple runner script for the Flask backend.
+Simple runner script for the FastAPI backend.
 """
 import os
 import sys
@@ -14,19 +14,19 @@ def check_dependencies():
     missing_packages = []
     
     try:
-        import flask
+        import fastapi
     except ImportError:
-        missing_packages.append('flask')
+        missing_packages.append('fastapi')
+    
+    try:
+        import uvicorn
+    except ImportError:
+        missing_packages.append('uvicorn')
     
     try:
         import dotenv
     except ImportError:
         missing_packages.append('python-dotenv')
-    
-    try:
-        import flask_cors
-    except ImportError:
-        missing_packages.append('flask-cors')
     
     if missing_packages:
         print("\n" + "="*60)

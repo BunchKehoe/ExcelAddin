@@ -1,8 +1,9 @@
 """
-Main Flask application factory and configuration.
+Main FastAPI application factory and configuration.
 """
-from flask import Flask, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 import sys
 import os
@@ -15,14 +16,18 @@ load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.infrastructure.config.app_config import AppConfig
-from src.presentation.controllers.raw_data_controller import raw_data_bp
-from src.presentation.controllers.market_data_controller import market_data_bp
-from src.presentation.controllers.data_upload_controller import data_upload_bp
+from src.presentation.controllers.raw_data_controller import raw_data_router
+from src.presentation.controllers.market_data_controller import market_data_router
+from src.presentation.controllers.data_upload_controller import data_upload_router
 
 
-def create_app() -> Flask:
-    """Create and configure the Flask application."""
-    app = Flask(__name__)
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(
+        title="Excel Backend API",
+        version="1.0.0",
+        description="Backend API for Prime Excellence Excel Add-in"
+    )
     
     # Configure logging
     logging.basicConfig(
@@ -31,31 +36,37 @@ def create_app() -> Flask:
     )
     
     # Configure CORS
-    CORS(app, origins=AppConfig.CORS_ORIGINS)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=AppConfig.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     
-    # Register blueprints
-    app.register_blueprint(raw_data_bp)
-    app.register_blueprint(market_data_bp)
-    app.register_blueprint(data_upload_bp)
+    # Include routers
+    app.include_router(raw_data_router)
+    app.include_router(market_data_router)
+    app.include_router(data_upload_router)
     
     # Health check endpoint
-    @app.route('/api/health', methods=['GET'])
-    def health_check():
+    @app.get('/api/health')
+    async def health_check():
         """Health check endpoint."""
-        return jsonify({
+        return {
             'status': 'healthy',
             'message': 'Excel Backend API is running',
             'environment': AppConfig.ENVIRONMENT,
             'cors_origins': AppConfig.CORS_ORIGINS,
             'nifi_endpoint': AppConfig.NIFI_ENDPOINT,
             'debug_mode': AppConfig.DEBUG
-        })
+        }
     
     # Debug endpoint for connectivity testing
-    @app.route('/api/debug', methods=['GET'])
-    def debug_info():
+    @app.get('/api/debug')
+    async def debug_info():
         """Debug endpoint to check backend configuration."""
-        return jsonify({
+        return {
             'status': 'debug',
             'environment': AppConfig.ENVIRONMENT,
             'host': AppConfig.HOST,
@@ -68,61 +79,70 @@ def create_app() -> Flask:
                 '/api/health',
                 '/api/debug',
                 '/api/raw-data/categories',
-                '/api/raw-data/funds/<catalog>',
+                '/api/raw-data/funds/{catalog}',
                 '/api/raw-data/download',
                 '/api/market-data/securities',
-                '/api/market-data/fields/<security>',
+                '/api/market-data/fields/{security}',
                 '/api/market-data/download',
                 '/api/data-upload/upload',
                 '/api/data-upload/types',
-                '/api/data-upload/status/<upload_id>'
+                '/api/data-upload/status/{upload_id}'
             ]
-        })
+        }
     
     # Root endpoint
-    @app.route('/', methods=['GET'])
-    def root():
+    @app.get('/')
+    async def root():
         """Root endpoint."""
-        return jsonify({
+        return {
             'message': 'Excel Backend API',
             'version': '1.0.0',
             'endpoints': [
                 '/api/health',
                 '/api/raw-data/categories',
-                '/api/raw-data/funds/<catalog>',
+                '/api/raw-data/funds/{catalog}',
                 '/api/raw-data/download',
                 '/api/market-data/securities',
-                '/api/market-data/fields/<security>',
+                '/api/market-data/fields/{security}',
                 '/api/market-data/download',
                 '/api/data-upload/upload',
                 '/api/data-upload/types',
-                '/api/data-upload/status/<upload_id>'
+                '/api/data-upload/status/{upload_id}'
             ]
-        })
+        }
     
-    # Global error handler
-    @app.errorhandler(404)
-    def not_found(error):
+    # Global exception handler for 404
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    
+    @app.exception_handler(404)
+    async def not_found_handler(request: Request, exc):
         """Handle 404 errors."""
-        return jsonify({
-            'success': False,
-            'error': 'Endpoint not found'
-        }), 404
+        return JSONResponse(
+            status_code=404,
+            content={
+                'success': False,
+                'error': 'Endpoint not found'
+            }
+        )
     
-    @app.errorhandler(500)
-    def internal_error(error):
+    # Global exception handler for 500
+    @app.exception_handler(500)
+    async def internal_error_handler(request: Request, exc):
         """Handle 500 errors."""
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
+        return JSONResponse(
+            status_code=500,
+            content={
+                'success': False,
+                'error': 'Internal server error'
+            }
+        )
     
     return app
 
-
 def main():
     """Main entry point for the application."""
-    app = create_app()
+    import uvicorn
     
     logger = logging.getLogger(__name__)
     logger.info(f"Starting Excel Backend API on {AppConfig.HOST}:{AppConfig.PORT}")
@@ -160,10 +180,15 @@ def main():
     else:
         logger.warning("SSL verification is DISABLED for NiFi connections - not recommended for production")
     
-    app.run(
+    # Create app
+    app = create_app()
+    
+    # Run with uvicorn
+    uvicorn.run(
+        app,
         host=AppConfig.HOST,
         port=AppConfig.PORT,
-        debug=AppConfig.DEBUG
+        log_level="debug" if AppConfig.DEBUG else "info"
     )
 
 

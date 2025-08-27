@@ -1,7 +1,7 @@
 """
-Flask controller for market data endpoints.
+FastAPI controller for market data endpoints.
 """
-from flask import Blueprint, request, jsonify
+from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import logging
 
@@ -10,11 +10,11 @@ from ...application.dtos.data_dtos import MarketDataDownloadRequestDto
 
 logger = logging.getLogger(__name__)
 
-market_data_bp = Blueprint('market_data', __name__, url_prefix='/api/market-data')
+market_data_router = APIRouter(prefix='/api/market-data', tags=['market-data'])
 
 
-@market_data_bp.route('/securities', methods=['GET'])
-def get_securities():
+@market_data_router.get('/securities')
+async def get_securities():
     """Get securities for dropdown menu."""
     try:
         service = MarketDataService()
@@ -23,21 +23,24 @@ def get_securities():
         # Convert to simple list for frontend dropdown
         security_list = [security.security for security in securities]
         
-        return jsonify({
+        return {
             'success': True,
             'data': security_list
-        })
+        }
         
     except Exception as e:
         logger.error(f"Error getting securities: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'success': False,
+                'error': str(e)
+            }
+        )
 
 
-@market_data_bp.route('/fields/<string:security>', methods=['GET'])
-def get_fields(security: str):
+@market_data_router.get('/fields/{security}')
+async def get_fields(security: str):
     """Get fields for a specific security."""
     try:
         service = MarketDataService()
@@ -46,64 +49,71 @@ def get_fields(security: str):
         # Convert to simple list for frontend dropdown
         field_list = [field.field for field in fields]
         
-        return jsonify({
+        return {
             'success': True,
             'data': field_list
-        })
+        }
         
     except Exception as e:
         logger.error(f"Error getting fields for security {security}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'success': False,
+                'error': str(e)
+            }
+        )
 
 
-@market_data_bp.route('/download', methods=['POST'])
-def download_market_data():
+@market_data_router.post('/download')
+async def download_market_data(request_data: Dict[str, Any]):
     """Download market data based on filters."""
     try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
+        if not request_data:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'success': False,
+                    'error': 'No data provided'
+                }
+            )
         
         # Validate required fields
         required_fields = ['security', 'field', 'start_date', 'end_date']
         for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    'success': False,
-                    'error': f'Missing required field: {field}'
-                }), 400
+            if field not in request_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        'success': False,
+                        'error': f'Missing required field: {field}'
+                    }
+                )
         
         # Create request DTO
         request_dto = MarketDataDownloadRequestDto(
-            security=data['security'],
-            field=data['field'],
-            start_date=data['start_date'],
-            end_date=data['end_date']
+            security=request_data['security'],
+            field=request_data['field'],
+            start_date=request_data['start_date'],
+            end_date=request_data['end_date']
         )
         
         service = MarketDataService()
         
         # Check if batching is requested
-        batch_size = data.get('batch_size', 1000)
-        batch_id = data.get('batch_id', None)
+        batch_size = request_data.get('batch_size', 1000)
+        batch_id = request_data.get('batch_id', None)
         
         if batch_id is not None:
             # Return batched response
             result = service.download_market_data_batched(request_dto, batch_size, batch_id)
-            return jsonify({
+            return {
                 'success': True,
                 'batch_id': result.batch_id,
                 'total_batches': result.total_batches,
                 'has_more': result.has_more,
                 'data': result.data
-            })
+            }
         else:
             # Return all data
             records = service.download_market_data(request_dto)
@@ -114,34 +124,21 @@ def download_market_data():
             if data_list:
                 columns = list(data_list[0].keys())
             
-            return jsonify({
+            return {
                 'success': True,
                 'count': len(data_list),
                 'columns': columns,  # Preserve column order from database
                 'data': data_list
-            })
+            }
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error downloading market data: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@market_data_bp.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors."""
-    return jsonify({
-        'success': False,
-        'error': 'Endpoint not found'
-    }), 404
-
-
-@market_data_bp.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors."""
-    return jsonify({
-        'success': False,
-        'error': 'Internal server error'
-    }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'success': False,
+                'error': str(e)
+            }
+        )

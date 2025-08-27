@@ -7,31 +7,31 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
-from flask import Blueprint, jsonify, request
+from fastapi import APIRouter, HTTPException
 
 from src.infrastructure.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
-data_upload_bp = Blueprint('data_upload', __name__, url_prefix='/api/data-upload')
+# Create router
+data_upload_router = APIRouter(prefix='/api/data-upload', tags=['data-upload'])
 
 
-@data_upload_bp.route('/upload', methods=['POST'])
-def upload_data():
+@data_upload_router.post('/upload')
+async def upload_data(request_data: Dict[str, Any]):
     """
     Handle data upload from Excel Add-in.
     Process the data and forward to NiFi endpoint.
     """
     try:
-        # Get request data
-        request_data = request.get_json()
-        
         if not request_data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'success': False,
+                    'error': 'No data provided'
+                }
+            )
         
         # Extract upload parameters
         data_type = request_data.get('dataType')
@@ -41,16 +41,22 @@ def upload_data():
         
         # Validate required fields
         if not data_type:
-            return jsonify({
-                'success': False,
-                'error': 'Data type is required'
-            }), 400
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'success': False,
+                    'error': 'Data type is required'
+                }
+            )
         
         if not data or not isinstance(data, list):
-            return jsonify({
-                'success': False,
-                'error': 'Data array is required and must be non-empty'
-            }), 400
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'success': False,
+                    'error': 'Data array is required and must be non-empty'
+                }
+            )
         
         # Log upload attempt
         logger.info(f"Processing data upload: type={data_type}, records={len(data)}")
@@ -59,10 +65,13 @@ def upload_data():
         processed_data = []
         for i, record in enumerate(data):
             if not isinstance(record, dict):
-                return jsonify({
-                    'success': False,
-                    'error': f'Invalid record format at index {i}'
-                }), 400
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        'success': False,
+                        'error': f'Invalid record format at index {i}'
+                    }
+                )
             
             # Add metadata to each record
             processed_record = {
@@ -112,61 +121,81 @@ def upload_data():
             
             if response.status_code == 200 or response.status_code == 201:
                 logger.info(f"Successfully forwarded {len(processed_data)} records to NiFi")
-                return jsonify({
+                return {
                     'success': True,
                     'message': f'Successfully uploaded {len(processed_data)} records',
                     'record_count': len(processed_data),
                     'data_type': data_type,
                     'nifi_response_status': response.status_code
-                })
+                }
             else:
                 logger.error(f"NiFi endpoint returned status {response.status_code}: {response.text}")
-                return jsonify({
-                    'success': False,
-                    'error': f'NiFi processing failed with status {response.status_code}',
-                    'details': response.text[:500] if response.text else None
-                }), 502
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        'success': False,
+                        'error': f'NiFi processing failed with status {response.status_code}',
+                        'details': response.text[:500] if response.text else None
+                    }
+                )
                 
         except requests.exceptions.SSLError as e:
             logger.error(f"SSL error when connecting to NiFi endpoint: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': 'SSL certificate verification failed when connecting to NiFi',
-                'details': 'Check certificate configuration in backend/certificates/ directory',
-                'ssl_error': str(e)
-            }), 502
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    'success': False,
+                    'error': 'SSL certificate verification failed when connecting to NiFi',
+                    'details': 'Check certificate configuration in backend/certificates/ directory',
+                    'ssl_error': str(e)
+                }
+            )
             
         except requests.exceptions.Timeout:
             logger.error("Timeout when connecting to NiFi endpoint")
-            return jsonify({
-                'success': False,
-                'error': 'Upload timeout - NiFi endpoint did not respond in time'
-            }), 504
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    'success': False,
+                    'error': 'Upload timeout - NiFi endpoint did not respond in time'
+                }
+            )
             
         except requests.exceptions.ConnectionError:
             logger.error("Connection error when connecting to NiFi endpoint")
-            return jsonify({
-                'success': False,
-                'error': 'Unable to connect to NiFi endpoint'
-            }), 502
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    'success': False,
+                    'error': 'Unable to connect to NiFi endpoint'
+                }
+            )
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error when connecting to NiFi: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f'Request failed: {str(e)}'
-            }), 502
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    'success': False,
+                    'error': f'Request failed: {str(e)}'
+                }
+            )
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error in upload_data: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error during upload processing'
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'success': False,
+                'error': 'Internal server error during upload processing'
+            }
+        )
 
 
-@data_upload_bp.route('/types', methods=['GET'])
-def get_upload_types():
+@data_upload_router.get('/types')
+async def get_upload_types():
     """
     Get available data upload types.
     """
@@ -189,21 +218,24 @@ def get_upload_types():
             }
         ]
         
-        return jsonify({
+        return {
             'success': True,
             'upload_types': upload_types
-        })
+        }
     
     except Exception as e:
         logger.error(f"Error getting upload types: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to retrieve upload types'
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'success': False,
+                'error': 'Failed to retrieve upload types'
+            }
+        )
 
 
-@data_upload_bp.route('/status/<upload_id>', methods=['GET'])
-def get_upload_status(upload_id: str):
+@data_upload_router.get('/status/{upload_id}')
+async def get_upload_status(upload_id: str):
     """
     Get the status of a specific upload.
     Note: This is a placeholder for future implementation with upload tracking.
@@ -211,16 +243,19 @@ def get_upload_status(upload_id: str):
     try:
         # This would normally query a database for upload status
         # For now, return a simple response
-        return jsonify({
+        return {
             'success': True,
             'upload_id': upload_id,
             'status': 'completed',
             'message': 'Upload status tracking not yet implemented'
-        })
+        }
     
     except Exception as e:
         logger.error(f"Error getting upload status: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to retrieve upload status'
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'success': False,
+                'error': 'Failed to retrieve upload status'
+            }
+        )
