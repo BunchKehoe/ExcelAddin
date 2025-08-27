@@ -7,6 +7,8 @@ interface CustomFunctionsNamespace {
 
 declare const CustomFunctions: CustomFunctionsNamespace;
 
+/* global Office */
+
 /**
  * PC.IRR - Takes five cells as input and adds them together
  * @customfunction PC.IRR
@@ -17,7 +19,7 @@ declare const CustomFunctions: CustomFunctionsNamespace;
  * @param cell5 Fifth cell value
  * @returns The sum of all five cell values
  */
-function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: number): number {
+export function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: number): number {
   // Validate inputs are numbers
   const inputs = [cell1, cell2, cell3, cell4, cell5];
   
@@ -28,7 +30,9 @@ function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: 
   }
   
   // Add all five values together
-  return cell1 + cell2 + cell3 + cell4 + cell5;
+  const result = cell1 + cell2 + cell3 + cell4 + cell5;
+  console.log(`IRR calculation: ${cell1} + ${cell2} + ${cell3} + ${cell4} + ${cell5} = ${result}`);
+  return result;
 }
 
 /**
@@ -38,7 +42,9 @@ function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: 
  * @param delimiter The delimiter to use (default comma with space)
  * @returns The joined string
  */
-function JOINCELLS(range: any[][], delimiter: string = ", "): string {
+export function JOINCELLS(range: any[][], delimiter: string = ", "): string {
+  console.log('JOINCELLS called with range:', range, 'delimiter:', delimiter);
+  
   if (!range || !Array.isArray(range)) {
     throw new Error("Invalid range provided");
   }
@@ -62,16 +68,18 @@ function JOINCELLS(range: any[][], delimiter: string = ", "): string {
     }
   }
   
-  // Join with delimiter and add space after delimiter if not already present
-  const finalDelimiter = delimiter.endsWith(' ') ? delimiter : delimiter + ' ';
-  return values.join(finalDelimiter);
+  // Join with delimiter 
+  const result = values.join(delimiter);
+  console.log(`JOINCELLS result: ${result}`);
+  return result;
 }
 
-// Register functions with CustomFunctions
-CustomFunctions.associate("PC.IRR", IRR);
-CustomFunctions.associate("PC.JOINCELLS", JOINCELLS);
+// Export functions to global scope for Excel
+(globalThis as any).IRR = IRR;
+(globalThis as any).JOINCELLS = JOINCELLS;
 
 // Initialize when Office is ready
 Office.onReady(() => {
-  console.log('Prime Capital Custom Functions ready: PC.IRR and PC.JOINCELLS registered');
+  console.log('Prime Capital Custom Functions ready: PC.IRR and PC.JOINCELLS');
+  console.log('Functions available on global scope:', typeof (globalThis as any).IRR, typeof (globalThis as any).JOINCELLS);
 });
