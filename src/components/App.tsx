@@ -142,7 +142,7 @@ const App: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
               <Box
                 component="img"
-                src={`${assetBaseUrl}/PCAG_white_trans.png`}
+                src={`${assetBaseUrl}/images/logos/PCAG_white_trans.png`}
                 alt="Prime Capital Logo"
                 sx={{
                   height: 24,
