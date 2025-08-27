@@ -91,7 +91,7 @@ function Clear-PortConflicts {
             try {
                 $bindings = Get-WebBinding -Name $siteName -ErrorAction SilentlyContinue
                 foreach ($binding in $bindings) {
-                    if ($binding.bindingInformation -like "*:$Port:*") {
+                    if ($binding.bindingInformation -like "*:${Port}:*") {
                         Write-Host "    Removing conflicting binding from '$siteName': $($binding.bindingInformation)" -ForegroundColor Yellow
                         Remove-WebBinding -Name $siteName -Port $Port -Protocol $binding.protocol -ErrorAction SilentlyContinue
                     }
@@ -584,9 +584,9 @@ try {
         Write-Host "Checking IIS bindings for port conflicts..." -ForegroundColor Yellow
         try {
             $allBindings = Get-WebConfigurationProperty -Filter "system.webServer/sites/site/bindings/binding" -Name "*" 2>$null
-            $conflictingBindings = $allBindings | Where-Object { $_.bindingInformation -like "*:$Port:*" }
+            $conflictingBindings = $allBindings | Where-Object { $_.bindingInformation -like "*:${Port}:*" }
             if ($conflictingBindings) {
-                Write-Warning "  ⚠️  Found existing IIS bindings on port $Port:"
+                Write-Warning "  ⚠️  Found existing IIS bindings on port ${Port}:"
                 foreach ($binding in $conflictingBindings) {
                     Write-Host "    $($binding.bindingInformation)" -ForegroundColor Gray
                 }
