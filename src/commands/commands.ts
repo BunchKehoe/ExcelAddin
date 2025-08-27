@@ -82,4 +82,17 @@ export function JOINCELLS(range: any[][], delimiter: string = ", "): string {
 Office.onReady(() => {
   console.log('Prime Capital Custom Functions ready: PC.IRR and PC.JOINCELLS');
   console.log('Functions available on global scope:', typeof (globalThis as any).IRR, typeof (globalThis as any).JOINCELLS);
+  
+  // Register functions with Excel's Custom Functions runtime
+  if (typeof CustomFunctions !== 'undefined') {
+    try {
+      CustomFunctions.associate('PC.IRR', IRR);
+      CustomFunctions.associate('PC.JOINCELLS', JOINCELLS);
+      console.log('Custom Functions successfully registered with Excel runtime');
+    } catch (error) {
+      console.error('Error registering custom functions:', error);
+    }
+  } else {
+    console.warn('CustomFunctions API not available - functions may not work in Excel');
+  }
 });
