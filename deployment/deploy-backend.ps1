@@ -1,14 +1,52 @@
 # ExcelAddin Backend Deployment Script
 # Deploys Python Flask backend as NSSM service for Windows Server 10
+#
+# ENVIRONMENT AUTO-DETECTION:
+# - server-vs84*  -> production
+# - server-vs81t* -> staging  
+# - all others    -> development
+#
+# USAGE:
+#   .\deploy-backend.ps1                    # Auto-detect environment
+#   .\deploy-backend.ps1 -Environment staging  # Force specific environment
+#   .\deploy-backend.ps1 -Force -SkipInstall   # Force deployment, skip dependency install
 
 param(
     [switch]$Force,
     [switch]$SkipInstall,
     [switch]$Debug,
-    [string]$Environment = "staging"
+    [string]$Environment = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# Auto-detect environment if not specified
+if ([string]::IsNullOrEmpty($Environment)) {
+    Write-Host "Auto-detecting environment based on hostname..." -ForegroundColor Yellow
+    
+    $hostname = $env:COMPUTERNAME
+    if (-not $hostname) {
+        $hostname = [System.Net.Dns]::GetHostName()
+    }
+    
+    Write-Host "  Current hostname: $hostname" -ForegroundColor Cyan
+    
+    # Environment detection based on hostname patterns
+    switch -Regex ($hostname) {
+        "server-vs84" { 
+            $Environment = "production"
+            Write-Host "  Detected PRODUCTION environment (server-vs84)" -ForegroundColor Red
+        }
+        "server-vs81t" { 
+            $Environment = "staging"
+            Write-Host "  Detected STAGING environment (server-vs81t)" -ForegroundColor Yellow
+        }
+        default {
+            $Environment = "development"
+            Write-Host "  Detected DEVELOPMENT environment (default)" -ForegroundColor Green
+        }
+    }
+}
 
 # Validate environment parameter
 if ($Environment -notin @("development", "staging", "production")) {
@@ -29,7 +67,7 @@ $LogDir = "C:\Logs\ExcelAddin"
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  ExcelAddin Backend Deployment (NSSM)" -ForegroundColor Green  
-Write-Host "  Environment: $Environment" -ForegroundColor Green
+Write-Host "  Environment: $Environment ($(if ([string]::IsNullOrEmpty($PSBoundParameters['Environment'])) { 'auto-detected' } else { 'specified' }))" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
@@ -75,12 +113,27 @@ Write-Host "Configuring environment..." -ForegroundColor Yellow
 $envSourceFile = Join-Path $BackendPath ".env.$Environment"
 $envTargetFile = Join-Path $BackendPath ".env"
 
+Write-Host "  Environment: $Environment" -ForegroundColor Cyan
+Write-Host "  Source file: $envSourceFile" -ForegroundColor Cyan
+Write-Host "  Target file: $envTargetFile" -ForegroundColor Cyan
+
 if (Test-Path $envSourceFile) {
+    Write-Host "  ✓ Found environment file for '$Environment'" -ForegroundColor Green
     Write-Host "  Copying $envSourceFile to $envTargetFile" -ForegroundColor Green
     Copy-Item $envSourceFile $envTargetFile -Force
+    
+    # Verify the copy was successful
+    if (Test-Path $envTargetFile) {
+        Write-Host "  ✓ Environment configuration applied successfully" -ForegroundColor Green
+    } else {
+        Write-Error "Failed to copy environment file to $envTargetFile"
+    }
 } else {
-    Write-Warning "  Environment file not found: $envSourceFile"
-    Write-Warning "  Backend may not have correct environment configuration"
+    Write-Error "Environment file not found: $envSourceFile`nAvailable .env files in $BackendPath`:"
+    Get-ChildItem $BackendPath -Name ".env.*" | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+    Write-Host ""
+    Write-Host "Please ensure you have a .env.$Environment file or specify a different environment with -Environment parameter" -ForegroundColor Red
+    exit 1
 }
 
 # Create log directory

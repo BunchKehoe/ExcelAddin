@@ -1,6 +1,11 @@
 # IIS Proxy Deployment Script for ExcelAddin
 # Deploys and configures IIS reverse proxy to forward requests to frontend (port 3000) and backend (port 5000)
 # Automatically removes ALL existing ExcelAddin and ExcelAddin-Proxy instances from IIS before deployment
+#
+# SERVER AUTO-DETECTION:
+# - server-vs84*  -> server-vs84.intranet.local (production)
+# - server-vs81t* -> server-vs81t.intranet.local (staging)
+# - all others    -> localhost (development)
 
 param(
     [string]$SiteName = "ExcelAddin-Proxy",
@@ -8,12 +13,37 @@ param(
     [int]$Port = 9443,
     [string]$FrontendUrl = "http://localhost:3000",
     [string]$BackendUrl = "http://localhost:5000",
-    [string]$ServerFQDN = "server-vs81t.intranet.local",
+    [string]$ServerFQDN = "",
     [switch]$Force,
     [switch]$Debug
 )
 
 $ErrorActionPreference = "Stop"
+
+# Auto-detect ServerFQDN if not specified
+if ([string]::IsNullOrEmpty($ServerFQDN)) {
+    $hostname = $env:COMPUTERNAME
+    if (-not $hostname) {
+        $hostname = [System.Net.Dns]::GetHostName()
+    }
+    
+    # Server FQDN detection based on hostname patterns
+    switch -Regex ($hostname) {
+        "server-vs84" { 
+            $ServerFQDN = "server-vs84.intranet.local"
+            $Environment = "production"
+        }
+        "server-vs81t" { 
+            $ServerFQDN = "server-vs81t.intranet.local"
+            $Environment = "staging"
+        }
+        default {
+            $ServerFQDN = "localhost"
+            $Environment = "development"
+        }
+    }
+    Write-Host "Auto-detected ServerFQDN: $ServerFQDN ($Environment)" -ForegroundColor Yellow
+}
 
 # Import WebAdministration module early for helper functions
 Import-Module WebAdministration -ErrorAction Stop
