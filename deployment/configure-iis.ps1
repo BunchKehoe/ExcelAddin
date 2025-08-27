@@ -171,7 +171,21 @@ if ($Port -eq 443 -or $Port -eq 9443) {
     
     if ($cert) {
         Write-Host "Using existing certificate: $($cert.Subject)" -ForegroundColor Green
-        New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1 -Thumbprint $cert.Thumbprint
+        
+        # Create HTTPS binding without thumbprint first
+        New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1
+        
+        # Then bind the SSL certificate to the binding
+        try {
+            $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port
+            $binding.AddSslCertificate($cert.Thumbprint, "my")
+            Write-Host "✅ HTTPS binding configured with SSL certificate" -ForegroundColor Green
+        } catch {
+            Write-Warning "⚠️  Failed to bind SSL certificate: $($_.Exception.Message)"
+            Write-Warning "   HTTPS binding created but SSL certificate not bound"
+            Write-Host "Manual certificate binding command:" -ForegroundColor Yellow
+            Write-Host "  netsh http add sslcert ipport=0.0.0.0:$Port certhash=$($cert.Thumbprint) appid={$([System.Guid]::NewGuid().ToString())}" -ForegroundColor Yellow
+        }
     } else {
         Write-Warning "No suitable SSL certificate found for HTTPS binding"
         Write-Warning "You'll need to configure SSL certificates manually"

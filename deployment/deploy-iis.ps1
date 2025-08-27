@@ -15,6 +15,62 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Helper function to safely remove IIS application pool
+function Remove-IISAppPoolSafely {
+    param([string]$PoolName)
+    
+    $pool = Get-IISAppPool -Name $PoolName -ErrorAction SilentlyContinue
+    if ($pool) {
+        try {
+            if ($pool.State -eq "Started") {
+                Stop-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+            }
+            Remove-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
+            
+            # Verify removal
+            $verifyPool = Get-IISAppPool -Name $PoolName -ErrorAction SilentlyContinue
+            if (-not $verifyPool) {
+                return $true
+            } else {
+                return $false
+            }
+        } catch {
+            Write-Warning "Failed to remove application pool '$PoolName': $($_.Exception.Message)"
+            return $false
+        }
+    }
+    return $true # Pool didn't exist, so "removal" was successful
+}
+
+# Helper function to safely remove IIS website
+function Remove-IISWebsiteSafely {
+    param([string]$SiteName)
+    
+    $site = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
+    if ($site) {
+        try {
+            if ($site.State -eq "Started") {
+                Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+            }
+            Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
+            
+            # Verify removal
+            $verifySite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
+            if (-not $verifySite) {
+                return $true
+            } else {
+                return $false
+            }
+        } catch {
+            Write-Warning "Failed to remove website '$SiteName': $($_.Exception.Message)"
+            return $false
+        }
+    }
+    return $true # Site didn't exist, so "removal" was successful
+}
+
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  IIS Proxy Deployment for ExcelAddin" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
@@ -70,15 +126,11 @@ try {
         Write-Host "  Found $($existingSites.Count) existing ExcelAddin website(s) to remove:" -ForegroundColor Yellow
         foreach ($site in $existingSites) {
             Write-Host "    • $($site.Name) (State: $($site.State))" -ForegroundColor Gray
-            try {
-                if ($site.State -eq "Started") {
-                    Stop-Website -Name $site.Name -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 2
-                }
-                Remove-Website -Name $site.Name -ErrorAction Stop
+            $removed = Remove-IISWebsiteSafely -SiteName $site.Name
+            if ($removed) {
                 Write-Host "      ✅ Removed website: $($site.Name)" -ForegroundColor Green
-            } catch {
-                Write-Warning "      ⚠️  Failed to remove website '$($site.Name)': $($_.Exception.Message)"
+            } else {
+                Write-Warning "      ⚠️  Failed to completely remove website: $($site.Name)"
             }
         }
     } else {
@@ -91,15 +143,11 @@ try {
         Write-Host "  Found $($existingPools.Count) existing ExcelAddin application pool(s) to remove:" -ForegroundColor Yellow
         foreach ($pool in $existingPools) {
             Write-Host "    • $($pool.Name) (State: $($pool.State))" -ForegroundColor Gray
-            try {
-                if ($pool.State -eq "Started") {
-                    Stop-WebAppPool -Name $pool.Name -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 2
-                }
-                Remove-WebAppPool -Name $pool.Name -ErrorAction Stop
+            $removed = Remove-IISAppPoolSafely -PoolName $pool.Name
+            if ($removed) {
                 Write-Host "      ✅ Removed application pool: $($pool.Name)" -ForegroundColor Green
-            } catch {
-                Write-Warning "      ⚠️  Failed to remove application pool '$($pool.Name)': $($_.Exception.Message)"
+            } else {
+                Write-Warning "      ⚠️  Failed to completely remove application pool: $($pool.Name)"
             }
         }
     } else {
@@ -120,13 +168,21 @@ try {
             # Force cleanup of any remaining instances
             if ($existingSite) {
                 Write-Host "Force removing remaining site '$SiteName'..." -ForegroundColor Yellow
-                Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
-                Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
+                $removed = Remove-IISWebsiteSafely -SiteName $SiteName
+                if ($removed) {
+                    Write-Host "  ✅ Force removed site '$SiteName'" -ForegroundColor Green
+                } else {
+                    Write-Warning "  ⚠️  Failed to force remove site '$SiteName'"
+                }
             }
             if ($existingPool) {
                 Write-Host "Force removing remaining application pool '$AppPoolName'..." -ForegroundColor Yellow
-                Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-                Remove-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+                $removed = Remove-IISAppPoolSafely -PoolName $AppPoolName
+                if ($removed) {
+                    Write-Host "  ✅ Force removed application pool '$AppPoolName'" -ForegroundColor Green
+                } else {
+                    Write-Warning "  ⚠️  Failed to force remove application pool '$AppPoolName'"
+                }
             }
         }
     }
@@ -420,12 +476,23 @@ try {
             # Remove existing binding if it exists
             $existingBinding = Get-WebBinding -Name $SiteName -Protocol "https" -ErrorAction SilentlyContinue
             if ($existingBinding) {
-                Remove-WebBinding -Name $SiteName -Protocol "https" -Port $Port
+                Remove-WebBinding -Name $SiteName -Protocol "https" -Port $Port -ErrorAction SilentlyContinue
             }
             
-            # Create HTTPS binding
-            New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1 -Thumbprint $cert.Thumbprint
-            Write-Host "  ✅ HTTPS binding configured" -ForegroundColor Green
+            # Create HTTPS binding without thumbprint first
+            New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1
+            
+            # Then bind the SSL certificate to the binding
+            try {
+                $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port
+                $binding.AddSslCertificate($cert.Thumbprint, "my")
+                Write-Host "  ✅ HTTPS binding configured with SSL certificate" -ForegroundColor Green
+            } catch {
+                Write-Warning "  ⚠️  Failed to bind SSL certificate: $($_.Exception.Message)"
+                Write-Warning "     HTTPS binding created but SSL certificate not bound"
+                Write-Host "  Manual certificate binding command:" -ForegroundColor Yellow
+                Write-Host "    netsh http add sslcert ipport=0.0.0.0:$Port certhash=$($cert.Thumbprint) appid={$([System.Guid]::NewGuid().ToString())}" -ForegroundColor Yellow
+            }
         } else {
             Write-Warning "  ⚠️  No suitable SSL certificate found for $ServerFQDN"
             Write-Warning "     HTTPS binding not configured - proxy will only work over HTTP"
