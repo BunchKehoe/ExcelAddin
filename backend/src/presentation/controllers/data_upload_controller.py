@@ -10,6 +10,7 @@ import requests
 from fastapi import APIRouter, HTTPException
 
 from src.infrastructure.config.app_config import AppConfig
+from ..models.request_models import DataUploadRequest, StandardResponse, UploadTypesResponse
 
 logger = logging.getLogger(__name__)
 
@@ -17,53 +18,19 @@ logger = logging.getLogger(__name__)
 data_upload_router = APIRouter(prefix='/api/data-upload', tags=['data-upload'])
 
 
-@data_upload_router.post('/upload')
-async def upload_data(request_data: Dict[str, Any]):
+@data_upload_router.post('/upload', response_model=StandardResponse)
+async def upload_data(request_data: DataUploadRequest):
     """
     Handle data upload from Excel Add-in.
     Process the data and forward to NiFi endpoint.
     """
     try:
-        if not request_data:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    'success': False,
-                    'error': 'No data provided'
-                }
-            )
-        
-        # Extract upload parameters
-        data_type = request_data.get('dataType')
-        skip_duplicate_check = request_data.get('skipDuplicateCheck', False)
-        delivery_date = request_data.get('deliveryDate')
-        data = request_data.get('data', [])
-        
-        # Validate required fields
-        if not data_type:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    'success': False,
-                    'error': 'Data type is required'
-                }
-            )
-        
-        if not data or not isinstance(data, list):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    'success': False,
-                    'error': 'Data array is required and must be non-empty'
-                }
-            )
-        
         # Log upload attempt
-        logger.info(f"Processing data upload: type={data_type}, records={len(data)}")
+        logger.info(f"Processing data upload: type={request_data.dataType}, records={len(request_data.data)}")
         
         # Process and validate data
         processed_data = []
-        for i, record in enumerate(data):
+        for i, record in enumerate(request_data.data):
             if not isinstance(record, dict):
                 raise HTTPException(
                     status_code=400,
@@ -78,9 +45,9 @@ async def upload_data(request_data: Dict[str, Any]):
                 **record,
                 '_upload_metadata': {
                     'upload_timestamp': datetime.utcnow().isoformat(),
-                    'data_type': data_type,
-                    'skip_duplicate_check': skip_duplicate_check,
-                    'delivery_date': delivery_date,
+                    'data_type': request_data.dataType,
+                    'skip_duplicate_check': request_data.skipDuplicateCheck,
+                    'delivery_date': request_data.deliveryDate,
                     'record_index': i
                 }
             }
@@ -90,10 +57,10 @@ async def upload_data(request_data: Dict[str, Any]):
         nifi_payload = {
             'source': 'excel_addin',
             'upload_timestamp': datetime.utcnow().isoformat(),
-            'data_type': data_type,
+            'data_type': request_data.dataType,
             'configuration': {
-                'skip_duplicate_check': skip_duplicate_check,
-                'delivery_date': delivery_date
+                'skip_duplicate_check': request_data.skipDuplicateCheck,
+                'delivery_date': request_data.deliveryDate
             },
             'records': processed_data,
             'record_count': len(processed_data)
@@ -121,13 +88,13 @@ async def upload_data(request_data: Dict[str, Any]):
             
             if response.status_code == 200 or response.status_code == 201:
                 logger.info(f"Successfully forwarded {len(processed_data)} records to NiFi")
-                return {
-                    'success': True,
-                    'message': f'Successfully uploaded {len(processed_data)} records',
-                    'record_count': len(processed_data),
-                    'data_type': data_type,
-                    'nifi_response_status': response.status_code
-                }
+                return StandardResponse(
+                    success=True,
+                    message=f'Successfully uploaded {len(processed_data)} records',
+                    record_count=len(processed_data),
+                    data_type=request_data.dataType,
+                    nifi_response_status=response.status_code
+                )
             else:
                 logger.error(f"NiFi endpoint returned status {response.status_code}: {response.text}")
                 raise HTTPException(
@@ -194,7 +161,7 @@ async def upload_data(request_data: Dict[str, Any]):
         )
 
 
-@data_upload_router.get('/types')
+@data_upload_router.get('/types', response_model=UploadTypesResponse)
 async def get_upload_types():
     """
     Get available data upload types.
@@ -218,10 +185,10 @@ async def get_upload_types():
             }
         ]
         
-        return {
-            'success': True,
-            'upload_types': upload_types
-        }
+        return UploadTypesResponse(
+            success=True,
+            upload_types=upload_types
+        )
     
     except Exception as e:
         logger.error(f"Error getting upload types: {str(e)}")
@@ -234,7 +201,7 @@ async def get_upload_types():
         )
 
 
-@data_upload_router.get('/status/{upload_id}')
+@data_upload_router.get('/status/{upload_id}', response_model=StandardResponse)
 async def get_upload_status(upload_id: str):
     """
     Get the status of a specific upload.
@@ -243,12 +210,12 @@ async def get_upload_status(upload_id: str):
     try:
         # This would normally query a database for upload status
         # For now, return a simple response
-        return {
-            'success': True,
-            'upload_id': upload_id,
-            'status': 'completed',
-            'message': 'Upload status tracking not yet implemented'
-        }
+        return StandardResponse(
+            success=True,
+            upload_id=upload_id,
+            status='completed',
+            message='Upload status tracking not yet implemented'
+        )
     
     except Exception as e:
         logger.error(f"Error getting upload status: {str(e)}")
