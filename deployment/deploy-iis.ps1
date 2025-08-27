@@ -380,12 +380,12 @@ try {
         </div>
         
         <div class="status">
-            <h3>✅ Proxy Server Active</h3>
+            <h3>&#x2705; Proxy Server Active</h3>
             <p>This server is acting as a reverse proxy for the Prime Capital Excel Add-in services.</p>
         </div>
 
         <div class="info">
-            <h4>📋 Service Architecture</h4>
+            <h4>&#x1F4CB; Service Architecture</h4>
             <ul>
                 <li><strong>Frontend Service:</strong> $FrontendUrl (Excel Add-in UI)</li>
                 <li><strong>Backend Service:</strong> $BackendUrl (API and data processing)</li>
@@ -394,16 +394,16 @@ try {
         </div>
 
         <div class="endpoints">
-            <h3>🔗 Available Endpoints</h3>
+            <h3>&#x1F517; Available Endpoints</h3>
             <ul>
-                <li><a href="/excellence/taskpane.html">Excel Taskpane Interface</a> → Frontend</li>
-                <li><a href="/excellence/commands.html">Excel Commands Interface</a> → Frontend</li>
-                <li><a href="/manifest.xml">Excel Manifest (Local)</a> → Frontend</li>
-                <li><a href="/manifest-staging.xml">Excel Manifest (Staging)</a> → Frontend</li>
-                <li><a href="/manifest-prod.xml">Excel Manifest (Production)</a> → Frontend</li>
-                <li><a href="/functions.json">Custom Functions</a> → Frontend</li>
-                <li><a href="/api/health">API Health Check</a> → Backend</li>
-                <li><a href="/api/status">API Status</a> → Backend</li>
+                <li><a href="/excellence/taskpane.html">Excel Taskpane Interface</a> &rarr; Frontend</li>
+                <li><a href="/excellence/commands.html">Excel Commands Interface</a> &rarr; Frontend</li>
+                <li><a href="/manifest.xml">Excel Manifest (Local)</a> &rarr; Frontend</li>
+                <li><a href="/manifest-staging.xml">Excel Manifest (Staging)</a> &rarr; Frontend</li>
+                <li><a href="/manifest-prod.xml">Excel Manifest (Production)</a> &rarr; Frontend</li>
+                <li><a href="/functions.json">Custom Functions</a> &rarr; Frontend</li>
+                <li><a href="/api/health">API Health Check</a> &rarr; Backend</li>
+                <li><a href="/api/status">API Status</a> &rarr; Backend</li>
             </ul>
         </div>
     </div>
