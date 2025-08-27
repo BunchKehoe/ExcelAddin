@@ -15,6 +15,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Import WebAdministration module early for helper functions
+Import-Module WebAdministration -ErrorAction Stop
+
 # Helper function to safely remove IIS application pool
 function Remove-IISAppPoolSafely {
     param([string]$PoolName)
@@ -101,10 +104,13 @@ try {
     }
     Write-Host "  ✅ IIS is installed" -ForegroundColor Green
 
-    # Import WebAdministration module
-    Write-Host "Loading IIS PowerShell module..." -ForegroundColor Yellow
-    Import-Module WebAdministration -ErrorAction Stop
-    Write-Host "  ✅ WebAdministration module loaded" -ForegroundColor Green
+    # Verify WebAdministration module is loaded (already imported at script start)
+    Write-Host "Verifying IIS PowerShell module..." -ForegroundColor Yellow
+    if (Get-Module -Name WebAdministration) {
+        Write-Host "  ✅ WebAdministration module loaded" -ForegroundColor Green
+    } else {
+        Write-Error "WebAdministration module not available"
+    }
 
     # Check for URL Rewrite module
     Write-Host "Checking URL Rewrite module..." -ForegroundColor Yellow
