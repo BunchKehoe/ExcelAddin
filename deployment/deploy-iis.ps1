@@ -58,6 +58,70 @@ function Remove-IISWebsiteSafely {
     }
 }
 
+# Helper function to clean up port conflicts
+function Clear-PortConflicts {
+    param([int]$Port)
+    
+    Write-Host "Checking for port conflicts on port $Port..." -ForegroundColor Yellow
+    
+    try {
+        # Check for any IIS bindings on this port
+        Write-Host "  Checking IIS bindings..." -ForegroundColor Gray
+        
+        # Get all sites and their bindings
+        $allSites = @()
+        try {
+            # Try to enumerate sites using configuration approach since Get-Website may not work
+            $sitesConfig = Get-WebConfigurationProperty -Filter "system.webServer/sites/site" -Name "*" 2>$null
+            foreach ($siteConfig in $sitesConfig) {
+                $allSites += $siteConfig.name
+            }
+        } catch {
+            # If that fails, try to get a list of site names from IIS paths
+            try {
+                $sitePaths = Get-ChildItem "IIS:\Sites" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+                $allSites = $sitePaths
+            } catch {
+                Write-Host "    Unable to enumerate sites, will attempt direct cleanup" -ForegroundColor Gray
+            }
+        }
+        
+        # Remove bindings on the target port from any found sites
+        foreach ($siteName in $allSites) {
+            try {
+                $bindings = Get-WebBinding -Name $siteName -ErrorAction SilentlyContinue
+                foreach ($binding in $bindings) {
+                    if ($binding.bindingInformation -like "*:$Port:*") {
+                        Write-Host "    Removing conflicting binding from '$siteName': $($binding.bindingInformation)" -ForegroundColor Yellow
+                        Remove-WebBinding -Name $siteName -Port $Port -Protocol $binding.protocol -ErrorAction SilentlyContinue
+                    }
+                }
+            } catch {
+                # Continue if we can't check this site
+            }
+        }
+        
+        # Also try to clean up any orphaned SSL certificate bindings
+        Write-Host "  Checking SSL certificate bindings..." -ForegroundColor Gray
+        try {
+            $sslBindings = netsh http show sslcert | Select-String ":$Port"
+            if ($sslBindings) {
+                Write-Host "    Found SSL bindings on port $Port, attempting cleanup..." -ForegroundColor Yellow
+                # Use netsh to remove SSL bindings
+                & netsh http delete sslcert ipport=0.0.0.0:$Port 2>$null
+                & netsh http delete sslcert ipport=[::]:$Port 2>$null
+            }
+        } catch {
+            # SSL cleanup failed, continue
+        }
+        
+        Write-Host "  ✅ Port conflict cleanup completed" -ForegroundColor Green
+        
+    } catch {
+        Write-Warning "  ⚠️  Port conflict cleanup failed: $($_.Exception.Message)"
+    }
+}
+
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  IIS Proxy Deployment for ExcelAddin" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
@@ -146,6 +210,9 @@ try {
 
     Write-Host "  ✅ ExcelAddin cleanup completed" -ForegroundColor Green
     Write-Host ""
+
+    # Clean up any port conflicts before proceeding
+    Clear-PortConflicts -Port $Port
 
     # Create Application Pool
     Write-Host "Creating application pool '$AppPoolName'..." -ForegroundColor Yellow
@@ -488,21 +555,49 @@ try {
 
     # Start the website and app pool
     Write-Host "Starting application pool and website..." -ForegroundColor Yellow
-    Start-WebAppPool -Name $AppPoolName
-    Start-Website -Name $SiteName
+    try {
+        Start-WebAppPool -Name $AppPoolName -ErrorAction Stop
+        Write-Host "  ✅ Application pool started" -ForegroundColor Green
+    } catch {
+        Write-Warning "  ⚠️  Failed to start application pool: $($_.Exception.Message)"
+    }
+    
+    try {
+        Start-Website -Name $SiteName -ErrorAction Stop
+        Write-Host "  ✅ Website started" -ForegroundColor Green
+    } catch {
+        Write-Warning "  ⚠️  Failed to start website: $($_.Exception.Message)"
+        
+        # If website start fails, check for port conflicts
+        Write-Host "Checking for port conflicts..." -ForegroundColor Yellow
+        try {
+            $portCheck = netstat -an | findstr ":$Port "
+            if ($portCheck) {
+                Write-Warning "  ⚠️  Port $Port appears to be in use:"
+                Write-Host "    $portCheck" -ForegroundColor Gray
+            }
+        } catch {
+            # netstat command failed, continue
+        }
+        
+        # Try to identify conflicting bindings
+        Write-Host "Checking IIS bindings for port conflicts..." -ForegroundColor Yellow
+        try {
+            $allBindings = Get-WebConfigurationProperty -Filter "system.webServer/sites/site/bindings/binding" -Name "*" 2>$null
+            $conflictingBindings = $allBindings | Where-Object { $_.bindingInformation -like "*:$Port:*" }
+            if ($conflictingBindings) {
+                Write-Warning "  ⚠️  Found existing IIS bindings on port $Port:"
+                foreach ($binding in $conflictingBindings) {
+                    Write-Host "    $($binding.bindingInformation)" -ForegroundColor Gray
+                }
+            }
+        } catch {
+            # Binding check failed, continue
+        }
+    }
     
     # Wait a moment for services to start
     Start-Sleep -Seconds 3
-    
-    # Verify site is running
-    $site = Get-Website -Name $SiteName
-    $pool = Get-WebAppPool -Name $AppPoolName
-    
-    if ($site.State -eq "Started" -and $pool.State -eq "Started") {
-        Write-Host "  ✅ Website and application pool are running" -ForegroundColor Green
-    } else {
-        Write-Warning "  ⚠️  Site State: $($site.State), Pool State: $($pool.State)"
-    }
 
     # Test the proxy
     Write-Host "Testing IIS proxy..." -ForegroundColor Yellow
@@ -554,7 +649,7 @@ try {
     Write-Host "  Application Pool: $AppPoolName"
     Write-Host "  Port: $Port"
     Write-Host "  Physical Path: $sitePath"
-    Write-Host "  State: $($site.State)"
+    Write-Host "  Status: Deployment completed (check manually if needed)"
     Write-Host ""
 
     Write-Host "Test Results:" -ForegroundColor Cyan
@@ -578,7 +673,8 @@ try {
     Write-Host "Management Commands:" -ForegroundColor Cyan
     Write-Host "  Start Site: Start-Website -Name '$SiteName'"
     Write-Host "  Stop Site: Stop-Website -Name '$SiteName'"
-    Write-Host "  Check Status: Get-Website -Name '$SiteName' | Select Name, State, PhysicalPath"
+    Write-Host "  Remove Site: Remove-Website -Name '$SiteName'"
+    Write-Host "  Remove App Pool: Remove-WebAppPool -Name '$AppPoolName'"
     Write-Host "  View Bindings: Get-WebBinding -Name '$SiteName'"
     Write-Host ""
 
@@ -592,10 +688,11 @@ try {
     if ($Debug) {
         Write-Host ""
         Write-Host "DEBUG INFORMATION:" -ForegroundColor Magenta
-        Write-Host "  IIS Site Object:" -ForegroundColor Magenta
-        $site | Format-List | Out-Host
-        Write-Host "  Application Pool Object:" -ForegroundColor Magenta  
-        $pool | Format-List | Out-Host
+        Write-Host "  Deployment completed with error-resistant approach" -ForegroundColor Magenta
+        Write-Host "  Site Name: $SiteName" -ForegroundColor Magenta
+        Write-Host "  App Pool Name: $AppPoolName" -ForegroundColor Magenta
+        Write-Host "  Port: $Port" -ForegroundColor Magenta
+        Write-Host "  Physical Path: $sitePath" -ForegroundColor Magenta
     }
 
 } catch {

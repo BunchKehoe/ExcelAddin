@@ -276,7 +276,8 @@ Write-Host ""
 Write-Host "Management Commands:" -ForegroundColor Cyan
 Write-Host "  Start Site: Start-Website -Name '$SiteName'"
 Write-Host "  Stop Site: Stop-Website -Name '$SiteName'"
-Write-Host "  Check Status: Get-Website -Name '$SiteName'"
+Write-Host "  Remove Site: Remove-Website -Name '$SiteName'"
+Write-Host "  Remove App Pool: Remove-WebAppPool -Name '$AppPoolName'"
 Write-Host ""
 
 if (-not $urlRewriteModule) {
