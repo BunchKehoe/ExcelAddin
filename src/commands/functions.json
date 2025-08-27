@@ -2,18 +2,33 @@
     "allowCustomDataForDataTypeAny": true,
     "functions": [
         {
-            "description": "Calculates aggregate IRR by dividing expected future value by original beginning value",
-            "id": "AGGIRR",
-            "name": "AGGIRR",
+            "description": "Takes five cells as input and adds them together",
+            "id": "PC.IRR",
+            "name": "PC.IRR",
             "parameters": [
                 {
-                    "description": "The expected future value",
-                    "name": "expectedFutureValue",
+                    "description": "First cell value",
+                    "name": "cell1",
                     "type": "number"
                 },
                 {
-                    "description": "The original beginning value",
-                    "name": "originalBeginningValue",
+                    "description": "Second cell value",
+                    "name": "cell2",
+                    "type": "number"
+                },
+                {
+                    "description": "Third cell value",
+                    "name": "cell3",
+                    "type": "number"
+                },
+                {
+                    "description": "Fourth cell value",
+                    "name": "cell4",
+                    "type": "number"
+                },
+                {
+                    "description": "Fifth cell value",
+                    "name": "cell5",
                     "type": "number"
                 }
             ],
@@ -23,8 +38,8 @@
         },
         {
             "description": "Joins cells from a range into a single string with specified delimiter",
-            "id": "JOINCELLS",
-            "name": "JOINCELLS",
+            "id": "PC.JOINCELLS",
+            "name": "PC.JOINCELLS",
             "parameters": [
                 {
                     "description": "The range of cells to join",
@@ -33,7 +48,7 @@
                     "type": "any"
                 },
                 {
-                    "description": "The delimiter to use (default comma)",
+                    "description": "The delimiter to use (default comma with space)",
                     "name": "delimiter",
                     "optional": true,
                     "type": "string"

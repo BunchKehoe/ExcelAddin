@@ -1,27 +1,44 @@
 /* global Office, CustomFunctions */
 
+// Type declarations for Excel Custom Functions
+interface CustomFunctionsNamespace {
+  associate(id: string, functionObject: Function): void;
+}
+
+declare const CustomFunctions: CustomFunctionsNamespace;
+
 /**
- * Calculates aggregate IRR by dividing expected future value by original beginning value
- * @customfunction AGGIRR
- * @param expectedFutureValue The expected future value
- * @param originalBeginningValue The original beginning value
- * @returns The aggregate IRR (future value / beginning value)
+ * PC.IRR - Takes five cells as input and adds them together
+ * @customfunction PC.IRR
+ * @param cell1 First cell value
+ * @param cell2 Second cell value  
+ * @param cell3 Third cell value
+ * @param cell4 Fourth cell value
+ * @param cell5 Fifth cell value
+ * @returns The sum of all five cell values
  */
-function AGGIRR(expectedFutureValue: number, originalBeginningValue: number): number {
-  if (originalBeginningValue === 0) {
-    throw new Error("Division by zero: original beginning value cannot be zero");
+function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: number): number {
+  // Validate inputs are numbers
+  const inputs = [cell1, cell2, cell3, cell4, cell5];
+  
+  for (let i = 0; i < inputs.length; i++) {
+    if (typeof inputs[i] !== 'number' || isNaN(inputs[i])) {
+      throw new Error(`Cell ${i + 1} must be a valid number`);
+    }
   }
-  return expectedFutureValue / originalBeginningValue;
+  
+  // Add all five values together
+  return cell1 + cell2 + cell3 + cell4 + cell5;
 }
 
 /**
- * Joins cells from a range into a single string with specified delimiter
- * @customfunction JOINCELLS
+ * PC.JOINCELLS - Joins cells from a range into a single string with specified delimiter
+ * @customfunction PC.JOINCELLS
  * @param range The range of cells to join
- * @param delimiter The delimiter to use (default comma)
+ * @param delimiter The delimiter to use (default comma with space)
  * @returns The joined string
  */
-function JOINCELLS(range: any[][], delimiter: string = ","): string {
+function JOINCELLS(range: any[][], delimiter: string = ", "): string {
   if (!range || !Array.isArray(range)) {
     throw new Error("Invalid range provided");
   }
@@ -34,31 +51,27 @@ function JOINCELLS(range: any[][], delimiter: string = ","): string {
       for (let j = 0; j < range[i].length; j++) {
         const value = range[i][j];
         if (value !== null && value !== undefined && String(value).trim() !== "") {
-          values.push(String(value));
+          values.push(String(value).trim());
         }
       }
     } else {
       const value = range[i];
       if (value !== null && value !== undefined && String(value).trim() !== "") {
-        values.push(String(value));
+        values.push(String(value).trim());
       }
     }
   }
   
-  return values.join(delimiter);
+  // Join with delimiter and add space after delimiter if not already present
+  const finalDelimiter = delimiter.endsWith(' ') ? delimiter : delimiter + ' ';
+  return values.join(finalDelimiter);
 }
 
-// Make functions available globally for Excel with multiple registration approaches
-(globalThis as any).AGGIRR = AGGIRR;
-(globalThis as any).JOINCELLS = JOINCELLS;
-
-// Also try window registration as backup
-if (typeof window !== 'undefined') {
-  (window as any).AGGIRR = AGGIRR;
-  (window as any).JOINCELLS = JOINCELLS;
-}
+// Register functions with CustomFunctions
+CustomFunctions.associate("PC.IRR", IRR);
+CustomFunctions.associate("PC.JOINCELLS", JOINCELLS);
 
 // Initialize when Office is ready
 Office.onReady(() => {
-  console.log('Custom Functions ready: AGGIRR and JOINCELLS registered');
+  console.log('Prime Capital Custom Functions ready: PC.IRR and PC.JOINCELLS registered');
 });

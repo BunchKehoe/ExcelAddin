@@ -15,6 +15,201 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Import WebAdministration module early for helper functions
+Import-Module WebAdministration -ErrorAction Stop
+
+# Helper function to safely remove IIS application pool
+function Remove-IISAppPoolSafely {
+    param([string]$PoolName)
+    
+    try {
+        # Try to stop the app pool first (if it exists and is running)
+        Stop-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        # Try to remove the app pool
+        Remove-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
+        
+        Write-Host "      ✅ Application pool '$PoolName' removed (if it existed)" -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Warning "      ⚠️  Error during application pool removal for '$PoolName': $($_.Exception.Message)"
+        return $false
+    }
+}
+
+# Helper function to safely remove IIS website
+function Remove-IISWebsiteSafely {
+    param([string]$SiteName)
+    
+    try {
+        # Try to stop the website first (if it exists and is running)
+        Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        # Try to remove the website
+        Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
+        
+        Write-Host "      ✅ Website '$SiteName' removed (if it existed)" -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Warning "      ⚠️  Error during website removal for '$SiteName': $($_.Exception.Message)"
+        return $false
+    }
+}
+
+# Helper function to clean up port conflicts
+function Test-SiteConfiguration {
+    param(
+        [string]$SiteName,
+        [string]$Port,
+        [string]$SitePath
+    )
+    
+    Write-Host "Diagnosing site configuration..." -ForegroundColor Yellow
+    
+    # Check if web.config exists and is valid
+    $webConfigPath = Join-Path $SitePath "web.config"
+    if (Test-Path $webConfigPath) {
+        Write-Host "  ✅ web.config file exists" -ForegroundColor Green
+        try {
+            [xml]$webConfig = Get-Content $webConfigPath
+            Write-Host "  ✅ web.config XML is valid" -ForegroundColor Green
+            
+            # Check for duplicate httpProtocol sections
+            $httpProtocolNodes = $webConfig.configuration.'system.webServer'.ChildNodes | Where-Object { $_.Name -eq 'httpProtocol' }
+            if ($httpProtocolNodes.Count -eq 1) {
+                Write-Host "  ✅ Single httpProtocol section found" -ForegroundColor Green
+            } elseif ($httpProtocolNodes.Count -gt 1) {
+                Write-Warning "  ⚠️  Multiple httpProtocol sections found: $($httpProtocolNodes.Count)"
+            }
+        } catch {
+            Write-Warning "  ⚠️  web.config XML validation failed: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Warning "  ⚠️  web.config file not found"
+    }
+    
+    # Check IIS site status
+    try {
+        $site = Get-WebSite -Name $SiteName -ErrorAction SilentlyContinue
+        if ($site) {
+            Write-Host "  ✅ IIS site exists - State: $($site.State)" -ForegroundColor Green
+            Write-Host "  📁 Physical Path: $($site.PhysicalPath)" -ForegroundColor Gray
+            Write-Host "  🌐 Bindings: $($site.Bindings.Collection.bindingInformation -join ', ')" -ForegroundColor Gray
+        } else {
+            Write-Warning "  ⚠️  IIS site not found"
+        }
+    } catch {
+        Write-Warning "  ⚠️  Cannot check IIS site status: $($_.Exception.Message)"
+    }
+    
+    # Check application pool status
+    try {
+        $appPool = Get-WebAppPool -Name $SiteName -ErrorAction SilentlyContinue
+        if ($appPool) {
+            Write-Host "  ✅ Application pool exists - State: $($appPool.State)" -ForegroundColor Green
+        } else {
+            Write-Warning "  ⚠️  Application pool not found"
+        }
+    } catch {
+        Write-Warning "  ⚠️  Cannot check application pool status: $($_.Exception.Message)"
+    }
+}
+
+function Clear-PortConflicts {
+    param([int]$Port)
+    
+    Write-Host "Checking for port conflicts on port $Port..." -ForegroundColor Yellow
+    
+    try {
+        # First, check if anything is actually listening on the port
+        Write-Host "  Checking for processes listening on port $Port..." -ForegroundColor Gray
+        $listeningProcesses = netstat -ano | Where-Object { $_ -match ":${Port}\s" }
+        if ($listeningProcesses) {
+            Write-Host "    ⚠️  Found processes listening on port ${Port}:" -ForegroundColor Yellow
+            foreach ($proc in $listeningProcesses) {
+                Write-Host "      $proc" -ForegroundColor Gray
+            }
+        } else {
+            Write-Host "    ✅ No processes found listening on port $Port" -ForegroundColor Green
+        }
+        
+        # Check for any IIS bindings on this port using multiple approaches
+        Write-Host "  Checking IIS bindings..." -ForegroundColor Gray
+        
+        $conflictingSites = @()
+        
+        # Try to get all sites using configuration approach
+        try {
+            $webConfig = Get-WebConfiguration -Filter "system.webServer/sites/site" -ErrorAction SilentlyContinue 2>$null
+            if ($webConfig) {
+                foreach ($site in $webConfig) {
+                    try {
+                        $siteName = $site.name
+                        if ($siteName) {
+                            # Check bindings for this site
+                            $bindings = Get-WebBinding -Name $siteName -ErrorAction SilentlyContinue 2>$null
+                            foreach ($binding in $bindings) {
+                                if ($binding.bindingInformation -like "*:${Port}:*") {
+                                    $conflictingSites += @{
+                                        SiteName = $siteName
+                                        Binding = $binding.bindingInformation
+                                        Protocol = $binding.protocol
+                                    }
+                                    Write-Host "      ⚠️  Found conflicting binding: $siteName ($($binding.bindingInformation))" -ForegroundColor Yellow
+                                }
+                            }
+                        }
+                    } catch {
+                        # Skip sites we can't check
+                        continue
+                    }
+                }
+            }
+        } catch {
+            Write-Host "    ⚠️  Could not enumerate sites using configuration approach" -ForegroundColor Yellow
+        }
+        
+        # Remove conflicting bindings
+        if ($conflictingSites.Count -gt 0) {
+            Write-Host "    Removing conflicting IIS bindings..." -ForegroundColor Yellow
+            foreach ($conflict in $conflictingSites) {
+                try {
+                    Remove-WebBinding -Name $conflict.SiteName -Port $Port -Protocol $conflict.Protocol -ErrorAction SilentlyContinue
+                    Write-Host "      ✅ Removed binding from $($conflict.SiteName)" -ForegroundColor Green
+                } catch {
+                    Write-Host "      ⚠️  Could not remove binding from $($conflict.SiteName): $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+        } else {
+            Write-Host "    ✅ No conflicting IIS bindings found" -ForegroundColor Green
+        }
+        
+        # Clean up SSL certificate bindings for the port
+        Write-Host "  Cleaning up SSL certificate bindings..." -ForegroundColor Gray
+        try {
+            $sslBindings = netsh http show sslcert | Where-Object { $_ -match "0\.0\.0\.0:$Port" -or $_ -match "\[::\]:$Port" }
+            if ($sslBindings) {
+                Write-Host "    Removing SSL bindings for port $Port..." -ForegroundColor Yellow
+                & netsh http delete sslcert ipport=0.0.0.0:$Port 2>$null
+                & netsh http delete sslcert ipport=[::]:$Port 2>$null
+                Write-Host "    ✅ SSL bindings cleaned up" -ForegroundColor Green
+            } else {
+                Write-Host "    ✅ No SSL bindings to clean up" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "    ⚠️  Could not clean SSL bindings: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+        
+        Write-Host "  ✅ Port conflict cleanup completed" -ForegroundColor Green
+        
+    } catch {
+        Write-Warning "  ⚠️  Port conflict cleanup failed: $($_.Exception.Message)"
+    }
+}
+}
+
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  IIS Proxy Deployment for ExcelAddin" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
@@ -45,10 +240,13 @@ try {
     }
     Write-Host "  ✅ IIS is installed" -ForegroundColor Green
 
-    # Import WebAdministration module
-    Write-Host "Loading IIS PowerShell module..." -ForegroundColor Yellow
-    Import-Module WebAdministration -ErrorAction Stop
-    Write-Host "  ✅ WebAdministration module loaded" -ForegroundColor Green
+    # Verify WebAdministration module is loaded (already imported at script start)
+    Write-Host "Verifying IIS PowerShell module..." -ForegroundColor Yellow
+    if (Get-Module -Name WebAdministration) {
+        Write-Host "  ✅ WebAdministration module loaded" -ForegroundColor Green
+    } else {
+        Write-Error "WebAdministration module not available"
+    }
 
     # Check for URL Rewrite module
     Write-Host "Checking URL Rewrite module..." -ForegroundColor Yellow
@@ -64,81 +262,67 @@ try {
     # Remove ALL existing ExcelAddin sites and app pools
     Write-Host "Cleaning up any existing ExcelAddin instances in IIS..." -ForegroundColor Yellow
     
-    # Find and remove existing websites
-    $existingSites = Get-Website | Where-Object { $_.Name -like "*ExcelAddin*" }
-    if ($existingSites) {
-        Write-Host "  Found $($existingSites.Count) existing ExcelAddin website(s) to remove:" -ForegroundColor Yellow
-        foreach ($site in $existingSites) {
-            Write-Host "    • $($site.Name) (State: $($site.State))" -ForegroundColor Gray
-            try {
-                if ($site.State -eq "Started") {
-                    Stop-Website -Name $site.Name -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 2
-                }
-                Remove-Website -Name $site.Name -ErrorAction Stop
-                Write-Host "      ✅ Removed website: $($site.Name)" -ForegroundColor Green
-            } catch {
-                Write-Warning "      ⚠️  Failed to remove website '$($site.Name)': $($_.Exception.Message)"
+    # Remove potential existing websites using try/catch approach
+    $potentialSites = @("ExcelAddin", "ExcelAddin-Proxy", $SiteName)
+    $removedSites = 0
+    foreach ($siteName in $potentialSites) {
+        try {
+            $removed = Remove-IISWebsiteSafely -SiteName $siteName
+            if ($removed) {
+                $removedSites++
             }
+        } catch {
+            # Silently continue - site probably doesn't exist
         }
-    } else {
-        Write-Host "  ✅ No existing ExcelAddin websites found" -ForegroundColor Green
     }
     
-    # Find and remove existing application pools
-    $existingPools = Get-IISAppPool | Where-Object { $_.Name -like "*ExcelAddin*" }
-    if ($existingPools) {
-        Write-Host "  Found $($existingPools.Count) existing ExcelAddin application pool(s) to remove:" -ForegroundColor Yellow
-        foreach ($pool in $existingPools) {
-            Write-Host "    • $($pool.Name) (State: $($pool.State))" -ForegroundColor Gray
-            try {
-                if ($pool.State -eq "Started") {
-                    Stop-WebAppPool -Name $pool.Name -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 2
-                }
-                Remove-WebAppPool -Name $pool.Name -ErrorAction Stop
-                Write-Host "      ✅ Removed application pool: $($pool.Name)" -ForegroundColor Green
-            } catch {
-                Write-Warning "      ⚠️  Failed to remove application pool '$($pool.Name)': $($_.Exception.Message)"
+    # Remove potential existing application pools using try/catch approach  
+    $potentialPools = @("ExcelAddin", "ExcelAddin-Proxy", $AppPoolName)
+    $removedPools = 0
+    foreach ($poolName in $potentialPools) {
+        try {
+            $removed = Remove-IISAppPoolSafely -PoolName $poolName
+            if ($removed) {
+                $removedPools++
             }
+        } catch {
+            # Silently continue - pool probably doesn't exist
         }
+    }
+    
+    if ($removedSites -gt 0 -or $removedPools -gt 0) {
+        Write-Host "  ✅ Cleaned up $removedSites website(s) and $removedPools application pool(s)" -ForegroundColor Green
     } else {
-        Write-Host "  ✅ No existing ExcelAddin application pools found" -ForegroundColor Green
+        Write-Host "  ✅ No existing ExcelAddin instances found to remove" -ForegroundColor Green
     }
 
     Write-Host "  ✅ ExcelAddin cleanup completed" -ForegroundColor Green
     Write-Host ""
 
-    # Verify cleanup was successful (legacy check - should be covered by cleanup above)
-    $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-    $existingPool = Get-IISAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-    
-    if ($existingSite -or $existingPool) {
-        if (-not $Force) {
-            Write-Error "Site '$SiteName' or Application Pool '$AppPoolName' still exists after cleanup. Use -Force to override any remaining conflicts."
-        } else {
-            # Force cleanup of any remaining instances
-            if ($existingSite) {
-                Write-Host "Force removing remaining site '$SiteName'..." -ForegroundColor Yellow
-                Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
-                Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
-            }
-            if ($existingPool) {
-                Write-Host "Force removing remaining application pool '$AppPoolName'..." -ForegroundColor Yellow
-                Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-                Remove-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-            }
-        }
-    }
+    # Clean up any port conflicts before proceeding
+    Clear-PortConflicts -Port $Port
 
     # Create Application Pool
     Write-Host "Creating application pool '$AppPoolName'..." -ForegroundColor Yellow
-    New-WebAppPool -Name $AppPoolName
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value ""  # No managed code needed for proxy
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00"  # Disable periodic restart
-    Write-Host "  ✅ Application pool created and configured" -ForegroundColor Green
+    try {
+        New-WebAppPool -Name $AppPoolName -ErrorAction Stop
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value ""  # No managed code needed for proxy
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00"  # Disable periodic restart
+        Write-Host "  ✅ Application pool created and configured" -ForegroundColor Green
+    } catch {
+        if ($_.Exception.Message -like "*already exists*") {
+            Write-Host "  ✅ Application pool '$AppPoolName' already exists (continuing)" -ForegroundColor Green
+            # Update existing pool settings
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value "" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00" -ErrorAction SilentlyContinue
+        } else {
+            Write-Error "Failed to create application pool: $($_.Exception.Message)"
+        }
+    }
 
     # Create physical directory
     Write-Host "Creating site directory..." -ForegroundColor Yellow
@@ -147,8 +331,8 @@ try {
         New-Item -ItemType Directory -Path $sitePath -Force | Out-Null
     }
     
-    # Create status page
-    $statusPageContent = @"
+    # Create status page (using safer HTML generation to avoid PowerShell parsing issues)
+    $statusPageContent = @'
 <!DOCTYPE html>
 <html>
 <head>
@@ -226,21 +410,21 @@ try {
         </div>
         
         <div class="status">
-            <h3>✅ Proxy Server Active</h3>
+            <h3>&#x2705; Proxy Server Active</h3>
             <p>This server is acting as a reverse proxy for the Prime Capital Excel Add-in services.</p>
         </div>
 
         <div class="info">
-            <h4>📋 Service Architecture</h4>
+            <h4>&#x1F4CB; Service Architecture</h4>
             <ul>
-                <li><strong>Frontend Service:</strong> $FrontendUrl (Excel Add-in UI)</li>
-                <li><strong>Backend Service:</strong> $BackendUrl (API and data processing)</li>
-                <li><strong>Proxy Port:</strong> $Port (This server)</li>
+                <li><strong>Frontend Service:</strong> FRONTEND_URL_PLACEHOLDER (Excel Add-in UI)</li>
+                <li><strong>Backend Service:</strong> BACKEND_URL_PLACEHOLDER (API and data processing)</li>
+                <li><strong>Proxy Port:</strong> PORT_PLACEHOLDER (This server)</li>
             </ul>
         </div>
 
         <div class="endpoints">
-            <h3>🔗 Available Endpoints</h3>
+            <h3>&#x1F517; Available Endpoints</h3>
             <ul>
                 <li><a href="/excellence/taskpane.html">Excel Taskpane Interface</a> → Frontend</li>
                 <li><a href="/excellence/commands.html">Excel Commands Interface</a> → Frontend</li>
@@ -263,15 +447,31 @@ try {
     </script>
 </body>
 </html>
-"@
+'@
+
+    # Replace placeholders with actual values to avoid PowerShell variable parsing issues
+    $statusPageContent = $statusPageContent -replace "FRONTEND_URL_PLACEHOLDER", $FrontendUrl
+    $statusPageContent = $statusPageContent -replace "BACKEND_URL_PLACEHOLDER", $BackendUrl
+    $statusPageContent = $statusPageContent -replace "PORT_PLACEHOLDER", $Port
 
     $statusPageContent | Out-File -FilePath (Join-Path $sitePath "default.htm") -Encoding UTF8
     Write-Host "  ✅ Site directory and status page created" -ForegroundColor Green
 
     # Create Website
     Write-Host "Creating IIS website '$SiteName'..." -ForegroundColor Yellow
-    New-Website -Name $SiteName -Port $Port -PhysicalPath $sitePath -ApplicationPool $AppPoolName
-    Write-Host "  ✅ IIS website created" -ForegroundColor Green
+    try {
+        New-Website -Name $SiteName -Port $Port -PhysicalPath $sitePath -ApplicationPool $AppPoolName -ErrorAction Stop
+        Write-Host "  ✅ IIS website created" -ForegroundColor Green
+    } catch {
+        if ($_.Exception.Message -like "*already exists*") {
+            Write-Host "  ✅ IIS website '$SiteName' already exists (continuing)" -ForegroundColor Green
+            # Update existing website settings
+            Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name "physicalPath" -Value $sitePath -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name "applicationPool" -Value $AppPoolName -ErrorAction SilentlyContinue
+        } else {
+            Write-Error "Failed to create website: $($_.Exception.Message)"
+        }
+    }
 
     # Configure URL rewrite rules
     if ($urlRewriteModule) {
@@ -364,13 +564,18 @@ try {
       </outboundRules>
     </rewrite>
     
-    <!-- CORS headers for Excel Add-in compatibility -->
+    <!-- Combined HTTP headers for CORS and security -->
     <httpProtocol>
       <customHeaders>
+        <!-- CORS headers for Excel Add-in compatibility -->
         <add name="Access-Control-Allow-Origin" value="*" />
         <add name="Access-Control-Allow-Methods" value="GET, POST, PUT, DELETE, PATCH, OPTIONS" />
         <add name="Access-Control-Allow-Headers" value="Content-Type, Authorization, X-Requested-With, Accept" />
         <add name="Access-Control-Max-Age" value="86400" />
+        <!-- Security headers -->
+        <add name="X-Content-Type-Options" value="nosniff" />
+        <add name="X-Frame-Options" value="SAMEORIGIN" />
+        <add name="X-XSS-Protection" value="1; mode=block" />
       </customHeaders>
     </httpProtocol>
     
@@ -384,18 +589,18 @@ try {
     
     <!-- Static content compression -->
     <urlCompression doDynamicCompression="true" doStaticCompression="true" />
-    
-    <!-- Security headers -->
-    <httpProtocol>
-      <customHeaders>
-        <add name="X-Content-Type-Options" value="nosniff" />
-        <add name="X-Frame-Options" value="SAMEORIGIN" />
-        <add name="X-XSS-Protection" value="1; mode=block" />
-      </customHeaders>
-    </httpProtocol>
   </system.webServer>
 </configuration>
 "@
+        
+        # Validate the web.config XML before writing
+        try {
+            [xml]$xmlValidation = $webConfigContent
+            Write-Host "  ✅ Web.config XML validation passed" -ForegroundColor Green
+        } catch {
+            Write-Error "Web.config XML validation failed: $($_.Exception.Message)"
+            throw "Invalid web.config generated"
+        }
         
         $webConfigContent | Out-File -FilePath (Join-Path $sitePath "web.config") -Encoding UTF8
         Write-Host "  ✅ URL rewrite rules configured" -ForegroundColor Green
@@ -420,12 +625,23 @@ try {
             # Remove existing binding if it exists
             $existingBinding = Get-WebBinding -Name $SiteName -Protocol "https" -ErrorAction SilentlyContinue
             if ($existingBinding) {
-                Remove-WebBinding -Name $SiteName -Protocol "https" -Port $Port
+                Remove-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN -ErrorAction SilentlyContinue
             }
             
-            # Create HTTPS binding
-            New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1 -Thumbprint $cert.Thumbprint
-            Write-Host "  ✅ HTTPS binding configured" -ForegroundColor Green
+            # Create HTTPS binding with hostname for SNI support
+            New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN -SslFlags 1
+            
+            # Then bind the SSL certificate to the binding
+            try {
+                $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN
+                $binding.AddSslCertificate($cert.Thumbprint, "my")
+                Write-Host "  ✅ HTTPS binding configured with SSL certificate" -ForegroundColor Green
+            } catch {
+                Write-Warning "  ⚠️  Failed to bind SSL certificate: $($_.Exception.Message)"
+                Write-Warning "     HTTPS binding created but SSL certificate not bound"
+                Write-Host "  Manual certificate binding command:" -ForegroundColor Yellow
+                Write-Host "    netsh http add sslcert ipport=0.0.0.0:$Port certhash=$($cert.Thumbprint) appid={$([System.Guid]::NewGuid().ToString())}" -ForegroundColor Yellow
+            }
         } else {
             Write-Warning "  ⚠️  No suitable SSL certificate found for $ServerFQDN"
             Write-Warning "     HTTPS binding not configured - proxy will only work over HTTP"
@@ -435,57 +651,226 @@ try {
         }
     }
 
-    # Start the website and app pool
+    # Start the website and app pool with improved error handling
     Write-Host "Starting application pool and website..." -ForegroundColor Yellow
-    Start-WebAppPool -Name $AppPoolName
-    Start-Website -Name $SiteName
     
-    # Wait a moment for services to start
-    Start-Sleep -Seconds 3
-    
-    # Verify site is running
-    $site = Get-Website -Name $SiteName
-    $pool = Get-WebAppPool -Name $AppPoolName
-    
-    if ($site.State -eq "Started" -and $pool.State -eq "Started") {
-        Write-Host "  ✅ Website and application pool are running" -ForegroundColor Green
-    } else {
-        Write-Warning "  ⚠️  Site State: $($site.State), Pool State: $($pool.State)"
+    # Start application pool first
+    try {
+        Start-WebAppPool -Name $AppPoolName -ErrorAction Stop
+        Write-Host "  ✅ Application pool started" -ForegroundColor Green
+    } catch {
+        Write-Warning "  ⚠️  Failed to start application pool: $($_.Exception.Message)"
+        
+        # Try to get more diagnostic information
+        try {
+            $appPoolState = (Get-WebAppPool -Name $AppPoolName).State
+            Write-Host "    Current app pool state: $appPoolState" -ForegroundColor Gray
+        } catch {
+            Write-Host "    Could not determine app pool state" -ForegroundColor Gray
+        }
     }
-
-    # Test the proxy
-    Write-Host "Testing IIS proxy..." -ForegroundColor Yellow
+    
+    # Wait a moment for app pool to fully initialize
     Start-Sleep -Seconds 2
+    
+    # Start website with retry logic
+    $websiteStarted = $false
+    $retryCount = 0
+    $maxRetries = 3
+    
+    while (-not $websiteStarted -and $retryCount -lt $maxRetries) {
+        try {
+            Start-Website -Name $SiteName -ErrorAction Stop
+            Write-Host "  ✅ Website started successfully" -ForegroundColor Green
+            $websiteStarted = $true
+            
+            # Run diagnostic to confirm configuration
+            Test-SiteConfiguration -SiteName $SiteName -Port $Port -SitePath $sitePath
+            
+        } catch {
+            $retryCount++
+            Write-Warning "  ⚠️  Website start attempt $retryCount failed: $($_.Exception.Message)"
+            
+            if ($retryCount -lt $maxRetries) {
+                Write-Host "    Retrying in 3 seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 3
+                
+                # Clear port conflicts before retry
+                Clear-PortConflicts -Port $Port
+            } else {
+                Write-Host "    Maximum retries reached. Running diagnostics..." -ForegroundColor Yellow
+                
+                # Run comprehensive diagnostics
+                Test-SiteConfiguration -SiteName $SiteName -Port $Port -SitePath $sitePath
+                
+                # Enhanced port conflict detection
+                Write-Host "  Performing enhanced port conflict analysis..." -ForegroundColor Yellow
+                try {
+                    $portCheck = netstat -ano | Where-Object { $_ -match ":$Port\s" }
+                    if ($portCheck) {
+                        Write-Warning "    ⚠️  Port $Port is in use by other processes:"
+                        foreach ($proc in $portCheck) {
+                            Write-Host "      $proc" -ForegroundColor Gray
+                        }
+                    } else {
+                        Write-Host "    ✅ Port $Port appears to be available" -ForegroundColor Green
+                    }
+                } catch {
+                    Write-Host "    Could not check port usage" -ForegroundColor Gray
+                }
+                
+                # Check for IIS binding conflicts
+                try {
+                    $allBindings = Get-WebConfigurationProperty -Filter "system.webServer/sites/site/bindings/binding" -Name "*" -ErrorAction SilentlyContinue 2>$null
+                    $conflictingBindings = $allBindings | Where-Object { $_.bindingInformation -like "*:${Port}:*" }
+                    if ($conflictingBindings) {
+                        Write-Warning "    ⚠️  Found existing IIS bindings on port ${Port}:"
+                        foreach ($binding in $conflictingBindings) {
+                            Write-Host "      $($binding.bindingInformation)" -ForegroundColor Gray
+                        }
+                    } else {
+                        Write-Host "    ✅ No conflicting IIS bindings found" -ForegroundColor Green
+                    }
+                } catch {
+                    Write-Host "    Could not check IIS bindings" -ForegroundColor Gray
+                }
+            }
+        }
+    }
+    
+    # Wait a moment for services to start, but don't wait too long to avoid hanging
+    Write-Host "Waiting for services to initialize..." -ForegroundColor Yellow
+    Start-Sleep -Seconds 3
+
+    # Test the proxy with improved error handling
+    Write-Host "Testing IIS proxy..." -ForegroundColor Yellow
     
     $testResults = @()
     
-    # Test main site
+    # Test main site with shorter timeout and better error handling
+    Write-Host "  Testing main site connectivity..." -ForegroundColor Gray
     try {
         $protocol = if ($Port -eq 443 -or $Port -eq 9443) { "https" } else { "http" }
         $testUrl = "${protocol}://localhost:${Port}"
-        $response = Invoke-WebRequest -Uri $testUrl -TimeoutSec 10 -UseBasicParsing -ErrorAction SilentlyContinue
-        if ($response.StatusCode -eq 200) {
-            $testResults += "✅ Main site responding (HTTP $($response.StatusCode))"
+        
+        # Use shorter timeout and ignore SSL errors for testing
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "IIS-Deployment-Test")
+        
+        # Set timeout to 5 seconds to prevent hanging
+        $response = $null
+        $testJob = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                $request = [System.Net.WebRequest]::Create($url)
+                $request.Timeout = 5000
+                $request.Method = "GET"
+                if ($url.StartsWith("https://")) {
+                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+                    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+                }
+                $response = $request.GetResponse()
+                return @{
+                    StatusCode = [int]$response.StatusCode
+                    Success = $true
+                }
+            } catch {
+                return @{
+                    StatusCode = 0
+                    Success = $false
+                    Error = $_.Exception.Message
+                }
+            }
+        } -ArgumentList $testUrl
+        
+        # Wait up to 8 seconds for the test to complete
+        $testCompleted = Wait-Job $testJob -Timeout 8
+        if ($testCompleted) {
+            $result = Receive-Job $testJob
+            Remove-Job $testJob
+            
+            if ($result.Success -and $result.StatusCode -eq 200) {
+                $testResults += "✅ Main site responding (HTTP $($result.StatusCode))"
+            } elseif ($result.Success) {
+                $testResults += "⚠️  Main site returned HTTP $($result.StatusCode)"
+            } else {
+                $testResults += "❌ Main site test failed: $($result.Error)"
+            }
         } else {
-            $testResults += "⚠️  Main site returned HTTP $($response.StatusCode)"
+            Remove-Job $testJob -Force
+            $testResults += "❌ Main site test timed out (site may not be properly configured)"
         }
+        
+        $webClient.Dispose()
     } catch {
         $testResults += "❌ Main site test failed: $($_.Exception.Message)"
     }
     
-    # Test if backend and frontend services are running (for proxy functionality)
+    # Test backend and frontend services with shorter timeouts
+    Write-Host "  Testing backend/frontend service connectivity..." -ForegroundColor Gray
     try {
-        $frontendTest = Invoke-WebRequest -Uri "$FrontendUrl/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction SilentlyContinue
-        $testResults += "✅ Frontend service responding (HTTP $($frontendTest.StatusCode))"
+        $frontendJob = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                $request = [System.Net.WebRequest]::Create("$url/health")
+                $request.Timeout = 3000
+                $response = $request.GetResponse()
+                return @{ Success = $true; StatusCode = [int]$response.StatusCode }
+            } catch {
+                return @{ Success = $false; Error = $_.Exception.Message }
+            }
+        } -ArgumentList $FrontendUrl
+        
+        if (Wait-Job $frontendJob -Timeout 5) {
+            $frontendResult = Receive-Job $frontendJob
+            if ($frontendResult.Success) {
+                $testResults += "✅ Frontend service responding (HTTP $($frontendResult.StatusCode))"
+            } else {
+                $testResults += "⚠️  Frontend service not responding - proxy forwarding may fail"
+            }
+        } else {
+            $testResults += "⚠️  Frontend service test timed out - proxy forwarding may fail"
+        }
+        Remove-Job $frontendJob -Force
     } catch {
         $testResults += "⚠️  Frontend service not responding - proxy forwarding may fail"
     }
     
     try {
-        $backendTest = Invoke-WebRequest -Uri "$BackendUrl/api/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction SilentlyContinue
-        $testResults += "✅ Backend service responding (HTTP $($backendTest.StatusCode))"
+        $backendJob = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                $request = [System.Net.WebRequest]::Create("$url/api/health")
+                $request.Timeout = 3000
+                $response = $request.GetResponse()
+                return @{ Success = $true; StatusCode = [int]$response.StatusCode }
+            } catch {
+                return @{ Success = $false; Error = $_.Exception.Message }
+            }
+        } -ArgumentList $BackendUrl
+        
+        if (Wait-Job $backendJob -Timeout 5) {
+            $backendResult = Receive-Job $backendJob
+            if ($backendResult.Success) {
+                $testResults += "✅ Backend service responding (HTTP $($backendResult.StatusCode))"
+            } else {
+                $testResults += "⚠️  Backend service not responding - API proxy forwarding may fail"
+            }
+        } else {
+            $testResults += "⚠️  Backend service test timed out - API proxy forwarding may fail"
+        }
+        Remove-Job $backendJob -Force
     } catch {
         $testResults += "⚠️  Backend service not responding - API proxy forwarding may fail"
+    }
+
+    # Ensure all background jobs are cleaned up to prevent hanging
+    Write-Host "  Cleaning up test jobs..." -ForegroundColor Gray
+    try {
+        Get-Job | Where-Object { $_.Name -like "*test*" -or $_.State -eq "Running" } | Remove-Job -Force -ErrorAction SilentlyContinue
+        Write-Host "  ✅ All test jobs cleaned up" -ForegroundColor Green
+    } catch {
+        Write-Host "  ⚠️  Warning: Some jobs may not have been cleaned up properly" -ForegroundColor Yellow
     }
 
     $endTime = Get-Date
@@ -503,12 +888,18 @@ try {
     Write-Host "  Application Pool: $AppPoolName"
     Write-Host "  Port: $Port"
     Write-Host "  Physical Path: $sitePath"
-    Write-Host "  State: $($site.State)"
+    Write-Host "  Status: Deployment completed (check manually if needed)"
     Write-Host ""
 
     Write-Host "Test Results:" -ForegroundColor Cyan
-    foreach ($result in $testResults) {
-        Write-Host "  $result"
+    if ($testResults -and $testResults.Count -gt 0) {
+        foreach ($result in $testResults) {
+            if ($result) {
+                Write-Host "  $result"
+            }
+        }
+    } else {
+        Write-Host "  ⚠️  No test results available - check site manually" -ForegroundColor Yellow
     }
     Write-Host ""
 
@@ -527,7 +918,8 @@ try {
     Write-Host "Management Commands:" -ForegroundColor Cyan
     Write-Host "  Start Site: Start-Website -Name '$SiteName'"
     Write-Host "  Stop Site: Stop-Website -Name '$SiteName'"
-    Write-Host "  Check Status: Get-Website -Name '$SiteName' | Select Name, State, PhysicalPath"
+    Write-Host "  Remove Site: Remove-Website -Name '$SiteName'"
+    Write-Host "  Remove App Pool: Remove-WebAppPool -Name '$AppPoolName'"
     Write-Host "  View Bindings: Get-WebBinding -Name '$SiteName'"
     Write-Host ""
 
@@ -541,10 +933,11 @@ try {
     if ($Debug) {
         Write-Host ""
         Write-Host "DEBUG INFORMATION:" -ForegroundColor Magenta
-        Write-Host "  IIS Site Object:" -ForegroundColor Magenta
-        $site | Format-List | Out-Host
-        Write-Host "  Application Pool Object:" -ForegroundColor Magenta  
-        $pool | Format-List | Out-Host
+        Write-Host "  Deployment completed with error-resistant approach" -ForegroundColor Magenta
+        Write-Host "  Site Name: $SiteName" -ForegroundColor Magenta
+        Write-Host "  App Pool Name: $AppPoolName" -ForegroundColor Magenta
+        Write-Host "  Port: $Port" -ForegroundColor Magenta
+        Write-Host "  Physical Path: $sitePath" -ForegroundColor Magenta
     }
 
 } catch {

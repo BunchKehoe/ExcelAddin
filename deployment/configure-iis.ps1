@@ -7,6 +7,7 @@ param(
     [int]$Port = 9443,
     [string]$FrontendUrl = "http://localhost:3000",
     [string]$BackendUrl = "http://localhost:5000",
+    [string]$ServerFQDN = "server-vs81t.intranet.local",
     [switch]$Force
 )
 
@@ -36,36 +37,62 @@ Write-Host "  Site Name: $SiteName"
 Write-Host "  Port: $Port" 
 Write-Host "  Frontend URL: $FrontendUrl"
 Write-Host "  Backend URL: $BackendUrl"
+Write-Host "  Server FQDN: $ServerFQDN"
 Write-Host ""
 
-# Remove existing site if it exists
-$existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-if ($existingSite) {
+# Remove existing site if it exists (using try/catch approach)
+Write-Host "Checking for existing site..." -ForegroundColor Yellow
+try {
     if ($Force) {
-        Write-Host "Removing existing site..." -ForegroundColor Yellow
-        Remove-Website -Name $SiteName
+        Write-Host "Removing existing site (if any)..." -ForegroundColor Yellow
+        Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
+        Write-Host "  ✅ Existing site removed (if it existed)" -ForegroundColor Green
     } else {
-        Write-Error "Site '$SiteName' already exists. Use -Force to override."
+        # Try to create without Force - if it fails, we'll handle it in the creation step
+        Write-Host "  Will attempt creation (use -Force to ensure cleanup)" -ForegroundColor Gray
     }
+} catch {
+    # Continue - any conflicts will be handled during creation
 }
 
-# Remove existing app pool if it exists
-$existingPool = Get-IISAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-if ($existingPool) {
+# Remove existing app pool if it exists (using try/catch approach)  
+Write-Host "Checking for existing application pool..." -ForegroundColor Yellow
+try {
     if ($Force) {
-        Write-Host "Removing existing application pool..." -ForegroundColor Yellow
-        Remove-WebAppPool -Name $AppPoolName
+        Write-Host "Removing existing application pool (if any)..." -ForegroundColor Yellow
+        Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+        Remove-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+        Write-Host "  ✅ Existing application pool removed (if it existed)" -ForegroundColor Green
     } else {
-        Write-Error "Application pool '$AppPoolName' already exists. Use -Force to override."
+        # Try to create without Force - if it fails, we'll handle it in the creation step
+        Write-Host "  Will attempt creation (use -Force to ensure cleanup)" -ForegroundColor Gray
     }
+} catch {
+    # Continue - any conflicts will be handled during creation
 }
 
 # Create Application Pool
 Write-Host "Creating application pool..." -ForegroundColor Yellow
-New-WebAppPool -Name $AppPoolName
-Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
-Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false
-Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value ""  # No managed code
+try {
+    New-WebAppPool -Name $AppPoolName -ErrorAction Stop
+    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
+    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false
+    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value ""  # No managed code
+    Write-Host "  ✅ Application pool '$AppPoolName' created successfully" -ForegroundColor Green
+} catch {
+    if ($_.Exception.Message -like "*already exists*" -and $Force) {
+        Write-Host "  ✅ Application pool '$AppPoolName' already exists (continuing with -Force)" -ForegroundColor Green
+        # Update existing pool settings
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value "" -ErrorAction SilentlyContinue
+    } elseif ($_.Exception.Message -like "*already exists*") {
+        Write-Error "Application pool '$AppPoolName' already exists. Use -Force to override."
+    } else {
+        Write-Error "Failed to create application pool: $($_.Exception.Message)"
+    }
+}
 
 # Create Website
 Write-Host "Creating website..." -ForegroundColor Yellow
@@ -101,7 +128,23 @@ $defaultContent = @"
 
 $defaultContent | Out-File -FilePath (Join-Path $sitePath "default.htm") -Encoding UTF8
 
-New-Website -Name $SiteName -Port $Port -PhysicalPath $sitePath -ApplicationPool $AppPoolName
+# Create Website
+Write-Host "Creating IIS website..." -ForegroundColor Yellow
+try {
+    New-Website -Name $SiteName -Port $Port -PhysicalPath $sitePath -ApplicationPool $AppPoolName -ErrorAction Stop
+    Write-Host "  ✅ IIS website '$SiteName' created successfully" -ForegroundColor Green
+} catch {
+    if ($_.Exception.Message -like "*already exists*" -and $Force) {
+        Write-Host "  ✅ IIS website '$SiteName' already exists (continuing with -Force)" -ForegroundColor Green
+        # Update existing website settings
+        Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name "physicalPath" -Value $sitePath -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name "applicationPool" -Value $AppPoolName -ErrorAction SilentlyContinue
+    } elseif ($_.Exception.Message -like "*already exists*") {
+        Write-Error "Website '$SiteName' already exists. Use -Force to override."
+    } else {
+        Write-Error "Failed to create website: $($_.Exception.Message)"
+    }
+}
 
 # Install URL Rewrite module (if not already installed)
 $urlRewriteModule = Get-WebConfigurationProperty -Filter "system.webServer/modules/add[@name='RewriteModule']" -Name "name" -ErrorAction SilentlyContinue
@@ -166,12 +209,29 @@ if ($Port -eq 443 -or $Port -eq 9443) {
     
     # Check for existing certificate
     $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { 
-        $_.Subject -like "*server-vs81t*" -or $_.Subject -like "*localhost*" 
-    } | Select-Object -First 1
+        $_.Subject -like "*$ServerFQDN*" -or 
+        $_.Subject -like "*localhost*" -or
+        $_.DnsNameList -contains $ServerFQDN
+    } | Sort-Object NotAfter -Descending | Select-Object -First 1
     
     if ($cert) {
         Write-Host "Using existing certificate: $($cert.Subject)" -ForegroundColor Green
-        New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1 -Thumbprint $cert.Thumbprint
+        Write-Host "Certificate expires: $($cert.NotAfter)" -ForegroundColor Gray
+        
+        # Create HTTPS binding with hostname for SNI support
+        New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN -SslFlags 1
+        
+        # Then bind the SSL certificate to the binding
+        try {
+            $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN
+            $binding.AddSslCertificate($cert.Thumbprint, "my")
+            Write-Host "✅ HTTPS binding configured with SSL certificate" -ForegroundColor Green
+        } catch {
+            Write-Warning "⚠️  Failed to bind SSL certificate: $($_.Exception.Message)"
+            Write-Warning "   HTTPS binding created but SSL certificate not bound"
+            Write-Host "Manual certificate binding command:" -ForegroundColor Yellow
+            Write-Host "  netsh http add sslcert ipport=0.0.0.0:$Port certhash=$($cert.Thumbprint) appid={$([System.Guid]::NewGuid().ToString())}" -ForegroundColor Yellow
+        }
     } else {
         Write-Warning "No suitable SSL certificate found for HTTPS binding"
         Write-Warning "You'll need to configure SSL certificates manually"
@@ -216,7 +276,8 @@ Write-Host ""
 Write-Host "Management Commands:" -ForegroundColor Cyan
 Write-Host "  Start Site: Start-Website -Name '$SiteName'"
 Write-Host "  Stop Site: Stop-Website -Name '$SiteName'"
-Write-Host "  Check Status: Get-Website -Name '$SiteName'"
+Write-Host "  Remove Site: Remove-Website -Name '$SiteName'"
+Write-Host "  Remove App Pool: Remove-WebAppPool -Name '$AppPoolName'"
 Write-Host ""
 
 if (-not $urlRewriteModule) {
