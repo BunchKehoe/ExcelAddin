@@ -1,55 +1,72 @@
-# ExcelAddin Deployment Guide (Vite + node-windows)
+# ExcelAddin Deployment Guide 
 
-This guide covers the deployment of the Excel Add-in using the new Vite-based build system with node-windows for frontend service and NSSM for backend services on Windows Server 10.
+This guide covers the deployment of the Excel Add-in using Vite build system with service-based architecture on Windows Server.
 
 ## Overview
 
-The Excel Add-in now uses:
-- **Build System**: Vite (replaced webpack)
-- **Frontend Hosting**: Express server via node-windows Windows service
-- **Backend Hosting**: Python Flask via NSSM  
-- **Reverse Proxy**: IIS on port 9443
-- **Target Platform**: Windows Server 10
+**Deployment Architecture**:
+- **Build System**: Vite for fast, optimized builds
+- **Frontend Service**: Express server via PM2/node-windows Windows service  
+- **Backend Service**: Python Flask via NSSM Windows service
+- **Reverse Proxy**: IIS on port 9443 with SSL termination
+- **Target Platform**: Windows Server 2016+
 
-## Quick Deployment
+## Prerequisites
 
-### Prerequisites
-- Windows Server 10
-- Node.js 18+ 
-- Python 3.8+
-- NSSM (Non-Sucking Service Manager) - for backend only
-- IIS with URL Rewrite module
-- node-windows package (installed automatically)
+### System Requirements
+- **Windows Server 2016+** (Windows 10 also supported)
+- **Node.js 18+** 
+- **Python 3.8+**
+- **IIS** with URL Rewrite module and FastCGI support
+- **NSSM** (Non-Sucking Service Manager) - automatically installed
+- **Enterprise SSL certificates** for production
 
-### 1. Complete Deployment (Recommended)
+### Network Requirements
+- **Port 9443**: HTTPS public access for Excel clients
+- **Port 3000**: Internal frontend service (localhost only)
+- **Port 5000**: Internal backend service (localhost only)
+- **Firewall**: Allow inbound HTTPS on port 9443
+
+## Deployment Scripts
+
+The deployment system provides four streamlined PowerShell scripts:
+
+| Script | Purpose | When to Use |
+|--------|---------|-------------|
+| **deploy-backend.ps1** | Deploy Python Flask backend service | Initial deployment or backend updates |
+| **deploy-frontend.ps1** | Deploy React frontend service | Initial deployment or frontend updates |
+| **deploy-iis.ps1** | Configure IIS reverse proxy | Initial deployment or IIS configuration changes |
+| **troubleshooting.ps1** | Comprehensive diagnostics and fixes | When issues occur or for health checks |
+
+### Quick Start Deployment
+
+**1. Complete Deployment (Recommended)**
 ```powershell
-# Run as Administrator
+# Run as Administrator in PowerShell
 cd deployment
-.\deploy-all.ps1 -Environment staging
-```
 
-### 2. Individual Service Deployment
-```powershell
-# Backend with environment support
+# Deploy backend service
 .\deploy-backend.ps1 -Environment staging
 
-# Frontend with environment support  
+# Deploy frontend service  
 .\deploy-frontend.ps1 -Environment staging
 
-# IIS Proxy 
-.\deploy-iis-proxy.ps1
+# Configure IIS reverse proxy
+.\deploy-iis.ps1
 
-# IIS configuration (legacy)
-.\configure-iis.ps1
+# Verify deployment
+.\troubleshooting.ps1 -TestAll
 ```
 
-### 3. Testing and Troubleshooting
+**2. Environment-Specific Deployment**
 ```powershell
-# Comprehensive diagnostics
-.\debug-integration.ps1 -Detailed
+# For staging environment
+.\deploy-backend.ps1 -Environment staging
+.\deploy-frontend.ps1 -Environment staging
 
-# Fix issues automatically
-.\debug-integration.ps1 -FixIssues
+# For production environment  
+.\deploy-backend.ps1 -Environment production
+.\deploy-frontend.ps1 -Environment production
 ```
 
 ## Architecture
@@ -59,44 +76,153 @@ Excel Client → IIS (9443) → Frontend Service (3000)
                         ↘ Backend Service (5000)
 ```
 
-### Service Details
-- **Backend Service**: `ExcelAddin-Backend` (NSSM)
-  - Port: 5000
+**Service Details**:
+- **Backend Service**: `ExcelAddin-Backend` (NSSM managed)
+  - Port: 5000 (internal only)
   - Technology: Python Flask
   - Endpoints: `/api/*`
+  - Process: `python app.py`
 
-- **Frontend Service**: `ExcelAddin Frontend` (node-windows)
-  - Port: 3000  
+- **Frontend Service**: `ExcelAddin Frontend` (PM2/node-windows managed)
+  - Port: 3000 (internal only)
   - Technology: Express.js serving Vite build
   - Endpoints: `/excellence/*`, static files
+  - Process: `node server.js`
 
-- **IIS Proxy**: `ExcelAddin-Proxy` site
-  - Port: 9443 (HTTPS)
-  - Routes to appropriate services
-  - Deployed via `deploy-iis-proxy.ps1`
+- **IIS Reverse Proxy**: 
+  - Port: 9443 (HTTPS public)
+  - SSL termination and routing
+  - Routes requests to appropriate internal services
+  - Enterprise certificate support
 
-## Build System Changes
+## Detailed Deployment Procedures
 
-### Vite vs Webpack Benefits
-- **Bundle Size**: 346KB vs 836KB (58% reduction)
-- **Dependencies**: 156 vs 577 packages (73% reduction)
-- **Build Time**: 3.4s vs 14.6s (77% faster)
-- **Development**: Better HTTPS support, faster HMR
+### Backend Service Deployment (deploy-backend.ps1)
 
-### Build Commands
+**What it does**:
+1. Installs Python dependencies via Poetry
+2. Creates/updates NSSM Windows service
+3. Configures service to start automatically
+4. Sets up logging and error handling
+5. Applies environment-specific configuration
+
+**Options**:
+```powershell
+# Basic deployment
+.\deploy-backend.ps1
+
+# Specify environment 
+.\deploy-backend.ps1 -Environment production
+
+# Force restart service
+.\deploy-backend.ps1 -Force
+
+# Enable verbose logging
+.\deploy-backend.ps1 -Verbose
+```
+
+**Service Configuration**:
+- **Service Name**: `ExcelAddin-Backend`
+- **Start Type**: Automatic (delayed start)
+- **Recovery**: Restart on failure (3 attempts)
+- **Logging**: Windows Event Log + file logging
+- **Working Directory**: `C:\inetpub\wwwroot\ExcelAddin\backend`
+
+### Frontend Service Deployment (deploy-frontend.ps1)
+
+**What it does**:
+1. Builds optimized Vite bundle for target environment
+2. Creates Express.js server for static file serving
+3. Installs/updates Windows service via node-windows
+4. Configures service for automatic startup
+5. Sets up request logging and error handling
+
+**Options**:
+```powershell
+# Basic deployment
+.\deploy-frontend.ps1
+
+# Specify environment
+.\deploy-frontend.ps1 -Environment staging
+
+# Skip build step (use existing dist/)
+.\deploy-frontend.ps1 -SkipBuild
+
+# Enable development mode logging
+.\deploy-frontend.ps1 -Debug
+```
+
+**Service Configuration**:
+- **Service Name**: `ExcelAddin Frontend`  
+- **Start Type**: Automatic
+- **Recovery**: Restart on failure
+- **Logging**: Console + file logging
+- **Working Directory**: `C:\inetpub\wwwroot\ExcelAddin`
+
+### IIS Proxy Configuration (deploy-iis.ps1)
+
+**What it does**:
+1. Creates IIS application pool for ExcelAddin
+2. Configures website on port 9443 with SSL
+3. Sets up URL rewrite rules for frontend/backend routing
+4. Applies security headers and performance optimizations
+5. Configures SSL certificate binding
+
+**Key IIS Configuration**:
+```xml
+<!-- URL Rewrite Rules -->
+<rule name="API Proxy" stopProcessing="true">
+    <match url="^excellence/api/(.*)" />
+    <action type="Rewrite" url="http://localhost:5000/api/{R:1}" />
+</rule>
+
+<rule name="Frontend Proxy" stopProcessing="true">  
+    <match url="^excellence/(.*)" />
+    <action type="Rewrite" url="http://localhost:3000/{R:1}" />
+</rule>
+```
+
+**SSL Configuration**:
+- **Port**: 9443 (HTTPS)
+- **Certificate**: Enterprise CA certificate
+- **Security**: TLS 1.2+ enforced
+- **Headers**: HSTS, CSP, X-Frame-Options configured
+
+## Environment Configuration
+
+### Build Configuration
+
+**Environment Variables**:
 ```bash
-# Development
-npm run dev
+# Staging
+VITE_API_BASE_URL=https://server-vs81t.intranet.local:9443/excellence/api
+VITE_ENVIRONMENT=staging
 
-# Staging build
+# Production  
+VITE_API_BASE_URL=https://server-vs84.intranet.local:9443/excellence/api
+VITE_ENVIRONMENT=production
+```
+
+**Build Commands**:
+```bash
+# Development build (with source maps)
+npm run build:dev
+
+# Staging build (optimized)
 npm run build:staging
 
-# Production build  
+# Production build (fully optimized)  
 npm run build:prod
 
-# Type checking
-npm run lint
+# Development server with hot reload
+npm run dev
 ```
+
+**Vite Performance Benefits**:
+- **Bundle Size**: 346KB (vs 836KB with webpack - 58% reduction)
+- **Dependencies**: 156 packages (vs 577 - 73% reduction)
+- **Build Time**: 3.4s (vs 14.6s - 77% faster)
+- **Development**: Better HTTPS support, faster HMR
 
 ## Excel Add-in Compatibility
 

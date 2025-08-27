@@ -1,9 +1,0 @@
-<!-- Prime Capital Logo -->
-<svg width="90" height="24" viewBox="0 0 90 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- PRIME text -->
-  <text x="0" y="12" font-family="Arial, sans-serif" font-size="10" font-weight="normal" fill="#666666">PRIME</text>
-  <!-- CAPITAL text -->
-  <text x="0" y="22" font-family="Arial, sans-serif" font-size="10" font-weight="normal" fill="#666666">CAPITAL</text>
-  <!-- Blue accent bar -->
-  <rect x="82" y="0" width="3" height="24" fill="#1976d2"/>
-</svg>

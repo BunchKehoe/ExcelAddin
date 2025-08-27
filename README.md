@@ -10,17 +10,9 @@ A comprehensive Excel JavaScript add-in built with modern web technologies (Type
   - `PC.JOINCELLS(range, delimiter)` - Join cell ranges with custom delimiters
 - **🔧 Multi-Environment Support** - Configured for local development, staging, and production
 - **🌐 Dynamic Configuration** - Automatically detects environment and configures API endpoints
-- **🚀 Modern Build System** - Webpack-based with TypeScript, hot reloading, and optimized production builds
+- **🚀 Modern Build System** - Vite-based with TypeScript, hot reloading, and optimized production builds
 
 ## Quick Start
-
-**Prerequisites**: Ensure you have Poetry installed for backend dependency management:
-```bash
-# Install Poetry (if not already installed)
-curl -sSL https://install.python-poetry.org | python3 -
-# or on Windows:
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
-```
 
 ### For Local Development
 ```bash
@@ -31,34 +23,25 @@ cd backend && poetry install && poetry shell
 # 2. Install HTTPS certificates for Office Add-ins
 npm run cert:install
 
-# 3. Start development server
-npm run dev                    # Runs on https://localhost:3000
+# 3. Start development servers
+npm run dev                    # Frontend on https://localhost:3000
+cd backend && python run.py   # Backend on http://localhost:5000
 
-# 4. Start backend server (if using API features)
-cd backend && poetry shell && python -m flask run --port=5000
-
-# 5. Load in Excel
+# 4. Load in Excel
 # Developer tab → Add-ins → Upload manifest.xml
 ```
 
-### For Production/Staging Deployment
-
-**NEW SERVICE-BASED ARCHITECTURE** - The deployment system has been completely redesigned:
-
-```bash
-# Deploy to staging/production server (Windows 10)
+### For Production Deployment
+```powershell
+# Deploy to Windows Server (run as Administrator)
 cd deployment
-.\deploy-all.ps1       # Initial deployment (as Administrator)
-.\update-all.ps1       # Updates after first deployment
-.\test-deployment.ps1  # Comprehensive testing
+.\deploy-backend.ps1 -Environment staging
+.\deploy-frontend.ps1 -Environment staging  
+.\deploy-iis.ps1
 
-# Individual service deployment
-.\deploy-backend.ps1   # Deploy Python backend via NSSM
-.\deploy-frontend.ps1  # Deploy React frontend via PM2
+# Verify deployment
+.\troubleshooting.ps1 -TestAll
 ```
-
-**Architecture**: IIS reverse proxy → Backend service (NSSM) + Frontend service (PM2)
-**Public URL**: https://server-vs81t.intranet.local:9443
 
 ### Testing Custom Functions
 Once loaded in Excel, try these examples:
@@ -71,76 +54,109 @@ Once loaded in Excel, try these examples:
 
 The add-in automatically detects the environment based on the hostname and configures API endpoints dynamically:
 
-| Environment | URL | API Endpoint | Manifest | Build Command |
-|-------------|-----|--------------|----------|---------------|
-| **Local Development** | https://localhost:3000 | http://localhost:5000/api | `manifest.xml` | `npm run build:dev` |
-| **Staging** | https://server-vs81t.intranet.local:9443/excellence/ | https://server-vs81t.intranet.local:9443/excellence/api | `manifest-staging.xml` | `npm run build:staging` |
-| **Production** | https://server-vs84.intranet.local:9443/excellence/ | https://server-vs84.intranet.local:9443/excellence/api | `manifest-prod.xml` | `npm run build:prod` |
+| Environment | URL | API Endpoint | Manifest |
+|-------------|-----|--------------|----------|
+| **Local Development** | https://localhost:3000 | http://localhost:5000/api | `manifest.xml` |
+| **Staging** | https://server-vs81t.intranet.local:9443/excellence/ | https://server-vs81t.intranet.local:9443/excellence/api | `manifest-staging.xml` |
+| **Production** | https://server-vs84.intranet.local:9443/excellence/ | https://server-vs84.intranet.local:9443/excellence/api | `manifest-prod.xml` |
 
-### Dynamic Environment Detection
-The application automatically detects its environment based on the browser hostname:
-- **localhost/127.0.0.1** → Development (uses localhost:5000 backend for local development)
-- **server-vs81t.intranet.local** → Staging 
-- **server-vs84.intranet.local** → Production
-- **Unknown hostnames** → Defaults to development with warnings
-
-### For Staging/Production Deployment
-```powershell
-# Build for specific environment
-npm run build:staging    # or npm run build:prod
-
-# Deploy to IIS (run as Administrator)
-.\deployment\scripts\build-and-deploy-iis.ps1
-```
-
-## Documentation
+## 📚 Documentation
 
 This project includes comprehensive documentation organized into three main guides:
 
-📖 **[Application Guide](APPLICATION_GUIDE.md)** - Overview of the application, architecture, features, and how it works
+📖 **[Technical Guide](TECHNICAL_GUIDE.md)** - Detailed technical overview, installation procedures, architecture documentation, and troubleshooting
 
-🚀 **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Detailed deployment instructions for both local development and Windows Server production with step-by-step procedures
+🚀 **[Deployment Guide](deployment/README.md)** - Production deployment procedures for Windows Server environments with service management and configuration
 
-🔧 **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Comprehensive troubleshooting tools, common issues, solutions, and diagnostic procedures
+🛠️ **Troubleshooting** - Use `.\deployment\troubleshooting.ps1` for comprehensive diagnostics and automated fixes
 
-📜 **[Certificate Guide](CERTIFICATE_GUIDE.md)** - Complete guide for managing Excel Add-in SSL certificates in local development
-
-## Key Features
+## Key Application Features
 
 - **Database Page**: KVG Data management with fund selection, data type filtering, and Excel integration
 - **Applications Page**: Launch buttons for Kassandra, Infinity, and Pandora applications  
 - **Dashboards Page**: Interactive Windpark A dashboard with multi-colored line charts
 - **Excel Functions Page**: Collapsible descriptions of available Excel functions
 
-## Architecture
+## Architecture Overview
 
 ### Frontend
 - **React 19.1.1**: Modern UI framework
 - **TypeScript 5.9.2**: Type-safe JavaScript
 - **Material UI 7.3.1**: Google's Material Design components
-- **Webpack 5.101.0**: Optimized bundle (~338 KB, 65% smaller than before)
+- **Vite**: Fast build tool (~346KB optimized bundle, 77% faster builds)
 - **Office.js**: Microsoft's JavaScript API for Office integration
 
 ### Backend
 - **Python 3.x + Flask**: REST API service
 - **Poetry**: Dependency management and virtual environment
-- **IIS Integration**: Runs directly in IIS using FastCGI
 - **Configuration**: Environment-based configuration
+- **Service Architecture**: NSSM Windows service for production
 
 ### Production Infrastructure  
-- **IIS**: Web server hosting both frontend and backend
-- **FastCGI**: Python integration for IIS
+- **IIS Reverse Proxy**: HTTPS termination and routing on port 9443
+- **Frontend Service**: Express.js via PM2/node-windows Windows service
+- **Backend Service**: Python Flask via NSSM Windows service
 - **SSL/TLS**: Enterprise certificate support
 
 ## Deployment Scenarios
 
 - **Local Development**: `https://localhost:3000` with self-signed certificates
-- **Windows Server Production**: IIS hosting both frontend and backend with enterprise SSL certificates, subpath support (e.g., `/excellence`), and integrated Python FastCGI support
+- **Production**: Windows Server with IIS reverse proxy, enterprise SSL certificates, service-based architecture, and subpath support (e.g., `/excellence`)
 
-## Support
+## Image Serving Architecture
 
-For detailed information, troubleshooting, and deployment procedures, please refer to the documentation guides above.
+**Current Structure Analysis**:
+The application uses a distributed image serving approach:
 
-## License
+```
+Images Location:
+├── public/assets/          # Frontend build-time assets (served by frontend service)  
+│   ├── PCAG_*.png         # Company logos and branding
+│   └── icon-*.png         # Excel add-in icons
+├── assets/                # Legacy duplicate assets (should be consolidated)
+│   └── PCAG_*.png         
+└── backend/static/        # Backend static files (if needed)
+```
 
-This project is licensed under the ISC License.
+**Recommended Structure for Better Image Serving**:
+```
+Consolidated Assets:
+├── public/assets/images/   # All images in organized structure
+│   ├── icons/             # Excel add-in icons
+│   ├── logos/             # Company branding  
+│   └── ui/                # UI elements and graphics
+├── backend/               # Backend serves API only, no static files
+└── dist/assets/images/    # Built and optimized images
+```
+
+**Image Serving Issues & Solutions**:
+1. **Duplicate Assets**: Images exist in both `/public/assets/` and `/assets/` - consolidate to `/public/assets/images/`
+2. **Backend Static Serving**: Backend should not serve frontend assets - remove any static file routes from Flask app
+3. **IIS Routing**: Ensure IIS proxy correctly routes image requests to frontend service, not backend
+4. **Build Optimization**: Vite should handle image optimization and proper URL generation
+
+## Quick Fix Commands
+
+**Certificate Issues**:
+```bash
+npm run cert:install    # Install certificates
+npm run cert:verify     # Check certificate status
+```
+
+**Service Issues**:
+```powershell
+# Comprehensive diagnostics and fixes
+.\deployment\troubleshooting.ps1 -TestAll -FixCommonIssues
+
+# Individual service management
+Get-Service "ExcelAddin*" | Restart-Service
+```
+
+**Build Issues**:
+```bash
+# Clean build
+npm run clean && npm install
+npm run build:staging  # or build:prod
+```
+
+For detailed information, troubleshooting, and deployment procedures, please refer to the **Technical Guide** and **Deployment Guide** linked above.
