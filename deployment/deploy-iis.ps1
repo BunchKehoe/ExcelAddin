@@ -476,15 +476,15 @@ try {
             # Remove existing binding if it exists
             $existingBinding = Get-WebBinding -Name $SiteName -Protocol "https" -ErrorAction SilentlyContinue
             if ($existingBinding) {
-                Remove-WebBinding -Name $SiteName -Protocol "https" -Port $Port -ErrorAction SilentlyContinue
+                Remove-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN -ErrorAction SilentlyContinue
             }
             
-            # Create HTTPS binding without thumbprint first
-            New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1
+            # Create HTTPS binding with hostname for SNI support
+            New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN -SslFlags 1
             
             # Then bind the SSL certificate to the binding
             try {
-                $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port
+                $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN
                 $binding.AddSslCertificate($cert.Thumbprint, "my")
                 Write-Host "  ✅ HTTPS binding configured with SSL certificate" -ForegroundColor Green
             } catch {

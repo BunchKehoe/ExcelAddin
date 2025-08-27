@@ -7,6 +7,7 @@ param(
     [int]$Port = 9443,
     [string]$FrontendUrl = "http://localhost:3000",
     [string]$BackendUrl = "http://localhost:5000",
+    [string]$ServerFQDN = "server-vs81t.intranet.local",
     [switch]$Force
 )
 
@@ -36,6 +37,7 @@ Write-Host "  Site Name: $SiteName"
 Write-Host "  Port: $Port" 
 Write-Host "  Frontend URL: $FrontendUrl"
 Write-Host "  Backend URL: $BackendUrl"
+Write-Host "  Server FQDN: $ServerFQDN"
 Write-Host ""
 
 # Remove existing site if it exists
@@ -166,18 +168,21 @@ if ($Port -eq 443 -or $Port -eq 9443) {
     
     # Check for existing certificate
     $cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { 
-        $_.Subject -like "*server-vs81t*" -or $_.Subject -like "*localhost*" 
-    } | Select-Object -First 1
+        $_.Subject -like "*$ServerFQDN*" -or 
+        $_.Subject -like "*localhost*" -or
+        $_.DnsNameList -contains $ServerFQDN
+    } | Sort-Object NotAfter -Descending | Select-Object -First 1
     
     if ($cert) {
         Write-Host "Using existing certificate: $($cert.Subject)" -ForegroundColor Green
+        Write-Host "Certificate expires: $($cert.NotAfter)" -ForegroundColor Gray
         
-        # Create HTTPS binding without thumbprint first
-        New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -SslFlags 1
+        # Create HTTPS binding with hostname for SNI support
+        New-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN -SslFlags 1
         
         # Then bind the SSL certificate to the binding
         try {
-            $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port
+            $binding = Get-WebBinding -Name $SiteName -Protocol "https" -Port $Port -HostHeader $ServerFQDN
             $binding.AddSslCertificate($cert.Thumbprint, "my")
             Write-Host "✅ HTTPS binding configured with SSL certificate" -ForegroundColor Green
         } catch {
