@@ -1,68 +1,67 @@
-# Excel Custom Functions Setup and Usage Guide
+# Excel Custom Functions Setup Guide
 
-## Problem Resolved
-The Excel Add-in custom functions were completely non-functional due to critical infrastructure issues:
-- Functions weren't properly registered with Excel's Custom Functions runtime
-- Incorrect manifest configuration pointing Script and Page to the same URL
-- Missing dedicated custom functions files
-- Complex Vite build pipeline interfering with Excel's runtime requirements
+## Overview
+This guide covers the setup and architecture of Excel Custom Functions for the Prime Capital add-in.
 
-## Solution Implemented
+## Key Architecture Fix
 
-### 1. Dedicated Custom Functions Architecture
-Created a clean, dedicated custom functions setup that follows Microsoft's best practices:
+### The Problem
+Excel Custom Functions were not loading because:
+1. **ES Module Incompatibility**: Excel Custom Functions runtime cannot load ES modules
+2. **Dual Implementation Conflict**: Functions were defined in both TypeScript (ES modules) and plain JavaScript
+3. **Incorrect Runtime Context**: Functions need to run in Excel's separate Custom Functions runtime, not the task pane context
 
-- **`/public/customfunctions.js`** - Pure JavaScript functions without module complexity
-- **`/public/customfunctions.html`** - Simple HTML page that loads the functions
-- **Separate manifest URLs** - Script and Page now point to different resources as required
+### The Solution
+Created dedicated plain JavaScript custom functions that are compatible with Excel's Custom Functions runtime:
 
-### 2. Fixed Manifest Configuration
-Updated all manifest files (local, staging, production) with proper Custom Functions extension points:
+## File Structure
+```
+/public/
+├── customfunctions.js      # Plain JavaScript functions (NO ES modules)
+├── customfunctions.html    # HTML page for Custom Functions runtime
+└── functions.json          # Function metadata for Excel
 
-```xml
-<ExtensionPoint xsi:type="CustomFunctions">
-  <Script>
-    <SourceLocation resid="CustomFunctions.Script.Url"/>
-  </Script>
-  <Page>
-    <SourceLocation resid="CustomFunctions.Page.Url"/>
-  </Page>
-  <Metadata>
-    <SourceLocation resid="Functions.Metadata.Url"/>
-  </Metadata>
-  <Namespace resid="CustomFunctions.Namespace"/>
-</ExtensionPoint>
+/src/commands/
+└── commands.ts            # Ribbon commands only (NOT custom functions)
 ```
 
-### 3. Proper Function Registration
-Functions are now registered with Excel's runtime using the correct API:
+## Key Requirements
 
+### 1. Plain JavaScript Only
+Excel Custom Functions **cannot use ES modules**:
+- ✅ `function IRR() { ... }`
+- ✅ `window.IRR = IRR`
+- ✅ `CustomFunctions.associate('PC.IRR', IRR)`
+- ❌ `export function IRR() { ... }`
+- ❌ `import { ... } from '...'`
+
+### 2. Separate Runtime Context
+- **Custom Functions**: Run in Excel's separate Custom Functions runtime
+- **Ribbon Commands**: Run in task pane context with full ES module support
+- These are completely separate and cannot share code directly
+
+### 3. Function Registration
+Functions must be registered with Excel's Custom Functions runtime:
 ```javascript
-// Register functions with CustomFunctions API
-CustomFunctions.associate("PC.IRR", IRR);
-CustomFunctions.associate("PC.JOINCELLS", JOINCELLS);
+Office.onReady(() => {
+  CustomFunctions.associate('PC.IRR', IRR);
+  CustomFunctions.associate('PC.JOINCELLS', JOINCELLS);
+});
 ```
 
-### 4. HTTPS Certificates Installed
-Development certificates are now properly installed for Excel Add-in compatibility:
-```bash
-npm run cert:install
+## Available Functions
+
+### PC.IRR
+Takes five cell values and returns their sum.
+```excel
+=PC.IRR(1,2,3,4,5)  # Returns 15
 ```
 
-## Available Custom Functions
-
-### PC.IRR Function
-- **Purpose**: Takes five cell values and returns their sum
-- **Usage**: `=PC.IRR(1,2,3,4,5)` → Returns `15`
-- **Parameters**: Five numeric cell values
-- **Validation**: Checks that all inputs are valid numbers
-
-### PC.JOINCELLS Function  
-- **Purpose**: Joins cells from a range with a specified delimiter
-- **Usage**: `=PC.JOINCELLS(A1:A3,"; ")` → Joins A1, A2, A3 with semicolon
-- **Parameters**: 
-  - `range`: Cell range to join
-  - `delimiter`: String to use as separator (optional, defaults to ", ")
+### PC.JOINCELLS
+Joins cell ranges with a specified delimiter.
+```excel
+=PC.JOINCELLS(A1:A3,"; ")  # Joins cells A1-A3 with semicolon
+```
 
 ## Development Setup
 
@@ -76,159 +75,83 @@ npm run cert:install
 ```bash
 npm run dev
 ```
-Server runs on `https://localhost:3000` with proper SSL certificates.
+Server runs at `https://localhost:3000`
 
 ### 3. Load Add-in in Excel
 1. Open Excel
-2. Go to Insert → Add-ins → Upload My Add-in
+2. Insert → Add-ins → Upload My Add-in
 3. Select `public/manifest-local.xml`
-4. Functions will be available as `PC.IRR` and `PC.JOINCELLS`
+4. Functions will be available as `=PC.IRR()` and `=PC.JOINCELLS()`
 
-## File Structure
+## Verification
 
-### Custom Functions Files
-- `/public/customfunctions.js` - Function implementations and registration
-- `/public/customfunctions.html` - HTML page that loads the functions  
-- `/public/functions.json` - Function metadata for Excel
-
-### Manifest Files
-- `/public/manifest-local.xml` - Local development (https://localhost:3000)
-- `/public/manifest-staging.xml` - Staging environment
-- `/public/manifest-prod.xml` - Production environment
-
-## Verification Steps
-
-### 1. Check Development Server
-All endpoints should be accessible:
-- `https://localhost:3000/customfunctions.js` - Function code
-- `https://localhost:3000/customfunctions.html` - Function page
+### Check Endpoints
+All endpoints should be accessible in browser:
+- `https://localhost:3000/customfunctions.html` - Custom Functions runtime page
+- `https://localhost:3000/customfunctions.js` - Function implementations
 - `https://localhost:3000/functions.json` - Function metadata
 
-### 2. Test Functions in Excel
+### Test in Excel
 ```excel
 =PC.IRR(1,2,3,4,5)        // Should return 15
 =PC.JOINCELLS(A1:A3,"; ") // Should join cells with semicolon
 ```
 
-### 3. Debug Console
-Functions include console logging for debugging:
-- Open Excel Developer Tools (F12)
-- Check Console tab for function execution logs
+### Debug Console
+Open Excel Developer Tools (F12) to see:
+- Function execution logs
+- Registration success/error messages
+- Parameter validation results
 
-## Technical Notes
+## Manifest Configuration
 
-- **No ES Modules**: Custom functions use traditional JavaScript to ensure Excel compatibility
-- **Direct Registration**: Functions are registered immediately with `CustomFunctions.associate()`
-- **Manifest Separation**: Script and Page URLs are now properly separated
-- **Public Assets**: Functions are served as static assets via Vite's public directory
-
-This implementation provides a solid foundation for Excel custom functions development with proper debugging and deployment support.
+### Local Development
+```xml
+<bt:Url id="CustomFunctions.Script.Url" DefaultValue="https://localhost:3000/customfunctions.js"/>
+<bt:Url id="CustomFunctions.Page.Url" DefaultValue="https://localhost:3000/customfunctions.html"/>
 ```
-This installs SSL certificates required for HTTPS, which is mandatory for Excel Add-ins.
 
-### 3. Build the Project
+### Production/Staging
+Manifests automatically point to correct server URLs with `/excellence/` base path.
+
+## Building for Production
+
 ```bash
-# Development build
-npm run build:dev
-
-# Or for production
-npm run build:prod
+npm run build
 ```
 
-### 4. Start Development Server
-```bash
-npm run dev
-```
-The server will start at `https://localhost:3000`
-
-## Available Custom Functions
-
-### PC.IRR
-**Syntax**: `=PC.IRR(cell1, cell2, cell3, cell4, cell5)`
-**Description**: Takes five numeric values and returns their sum
-**Example**: `=PC.IRR(1, 2, 3, 4, 5)` returns `15`
-
-### PC.JOINCELLS  
-**Syntax**: `=PC.JOINCELLS(range, [delimiter])`
-**Description**: Joins cells from a range into a single string with specified delimiter
-**Example**: `=PC.JOINCELLS(A1:A3, "; ")` joins cells A1, A2, A3 with semicolon separator
-
-## Testing the Add-in
-
-### Local Development Testing
-
-1. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
-
-2. **Verify endpoints are working**:
-   - Main taskpane: `https://localhost:3000/taskpane.html`
-   - Custom functions: `https://localhost:3000/commands.html`
-   - Functions metadata: `https://localhost:3000/functions.json`
-
-3. **Load the manifest in Excel**:
-   - Use `public/manifest-local.xml` for local development
-   - Open Excel → Insert → Add-ins → Upload My Add-in
-   - Select the manifest file
-
-### Production Testing
-
-1. **Build for production**:
-   ```bash
-   npm run build:prod
-   ```
-
-2. **Deploy to your server** and update manifest URLs accordingly
+Build process copies custom functions files from `/public` to `/dist`:
+- `dist/customfunctions.js`
+- `dist/customfunctions.html`
+- `dist/functions.json`
 
 ## Troubleshooting
 
-### Common Issues
+### Functions Not Loading
+1. Check Excel Developer Console for errors
+2. Verify custom functions endpoints are accessible in browser
+3. Ensure no ES module syntax in `customfunctions.js`
+4. Check that `CustomFunctions.associate()` is being called
 
-1. **HTTPS Certificate Errors**:
-   - Run `npm run cert:install`
-   - Restart browser after certificate installation
-
-2. **Functions not appearing in Excel**:
-   - Check console for JavaScript errors in the commands.html page
-   - Verify functions.json is accessible
-   - Ensure manifest URLs point to correct server
-
-3. **"Function not found" errors**:
-   - Verify the function names match the IDs in functions.json
-   - Check that functions are properly exported to global scope
-   - Ensure Office.js is loaded before custom functions
-
-### Debug Console Output
-
-The custom functions include console logging. Open Developer Tools in Excel to see:
-- Function execution logs
-- Parameter values
-- Error messages
-
-## File Structure
-
-```
-src/commands/
-├── commands.ts          # Custom function implementations
-├── functions.json       # Function metadata for Excel
-public/
-├── functions.json       # Copy of functions metadata
-├── manifest-local.xml   # Development manifest
-├── manifest-staging.xml # Staging manifest
-└── manifest-prod.xml    # Production manifest
+### SSL Certificate Issues
+```bash
+npm run cert:install
 ```
 
-## Development Notes
+### Function Updates
+1. Restart Excel completely
+2. Reload the add-in
+3. Clear Excel's function cache if needed
 
-- Functions are exported to global scope using `(globalThis as any).IRR = IRR`
-- TypeScript validation ensures type safety
-- All functions include input validation and error handling
-- Console logging helps with debugging during development
+## Technical Notes
 
-## Next Steps
+### Why Plain JavaScript?
+- Excel Custom Functions runtime is separate from task pane context
+- This runtime cannot load ES modules
+- Plain JavaScript ensures maximum compatibility
+- Vite handles task pane complexity separately
 
-1. Test functions in Excel with the local manifest
-2. Modify function implementations as needed
-3. Update functions.json metadata if adding new functions
-4. Deploy to staging/production servers for broader testing
+### Function Isolation
+- Custom Functions: `/public/customfunctions.js` (plain JS)
+- Ribbon Commands: `/src/commands/commands.ts` (TypeScript with ES modules)
+- These run in completely separate contexts and cannot share code directly
