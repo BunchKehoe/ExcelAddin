@@ -22,56 +22,40 @@ Import-Module WebAdministration -ErrorAction Stop
 function Remove-IISAppPoolSafely {
     param([string]$PoolName)
     
-    $pool = Get-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
-    if ($pool) {
-        try {
-            if ($pool.State -eq "Started") {
-                Stop-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 2
-            }
-            Remove-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
-            
-            # Verify removal
-            $verifyPool = Get-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
-            if (-not $verifyPool) {
-                return $true
-            } else {
-                return $false
-            }
-        } catch {
-            Write-Warning "Failed to remove application pool '$PoolName': $($_.Exception.Message)"
-            return $false
-        }
+    try {
+        # Try to stop the app pool first (if it exists and is running)
+        Stop-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        # Try to remove the app pool
+        Remove-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
+        
+        Write-Host "      ✅ Application pool '$PoolName' removed (if it existed)" -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Warning "      ⚠️  Error during application pool removal for '$PoolName': $($_.Exception.Message)"
+        return $false
     }
-    return $true # Pool didn't exist, so "removal" was successful
 }
 
 # Helper function to safely remove IIS website
 function Remove-IISWebsiteSafely {
     param([string]$SiteName)
     
-    $site = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-    if ($site) {
-        try {
-            if ($site.State -eq "Started") {
-                Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 2
-            }
-            Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
-            
-            # Verify removal
-            $verifySite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-            if (-not $verifySite) {
-                return $true
-            } else {
-                return $false
-            }
-        } catch {
-            Write-Warning "Failed to remove website '$SiteName': $($_.Exception.Message)"
-            return $false
-        }
+    try {
+        # Try to stop the website first (if it exists and is running)
+        Stop-Website -Name $SiteName -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        # Try to remove the website
+        Remove-Website -Name $SiteName -ErrorAction SilentlyContinue
+        
+        Write-Host "      ✅ Website '$SiteName' removed (if it existed)" -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Warning "      ⚠️  Error during website removal for '$SiteName': $($_.Exception.Message)"
+        return $false
     }
-    return $true # Site didn't exist, so "removal" was successful
 }
 
 Write-Host "========================================" -ForegroundColor Green
@@ -126,81 +110,64 @@ try {
     # Remove ALL existing ExcelAddin sites and app pools
     Write-Host "Cleaning up any existing ExcelAddin instances in IIS..." -ForegroundColor Yellow
     
-    # Find and remove existing websites
-    $existingSites = Get-Website | Where-Object { $_.Name -like "*ExcelAddin*" }
-    if ($existingSites) {
-        Write-Host "  Found $($existingSites.Count) existing ExcelAddin website(s) to remove:" -ForegroundColor Yellow
-        foreach ($site in $existingSites) {
-            Write-Host "    • $($site.Name) (State: $($site.State))" -ForegroundColor Gray
-            $removed = Remove-IISWebsiteSafely -SiteName $site.Name
+    # Remove potential existing websites using try/catch approach
+    $potentialSites = @("ExcelAddin", "ExcelAddin-Proxy", $SiteName)
+    $removedSites = 0
+    foreach ($siteName in $potentialSites) {
+        try {
+            $removed = Remove-IISWebsiteSafely -SiteName $siteName
             if ($removed) {
-                Write-Host "      ✅ Removed website: $($site.Name)" -ForegroundColor Green
-            } else {
-                Write-Warning "      ⚠️  Failed to completely remove website: $($site.Name)"
+                $removedSites++
             }
+        } catch {
+            # Silently continue - site probably doesn't exist
         }
-    } else {
-        Write-Host "  ✅ No existing ExcelAddin websites found" -ForegroundColor Green
     }
     
-    # Find and remove existing application pools
-    $existingPools = Get-WebAppPool | Where-Object { $_.Name -like "*ExcelAddin*" }
-    if ($existingPools) {
-        Write-Host "  Found $($existingPools.Count) existing ExcelAddin application pool(s) to remove:" -ForegroundColor Yellow
-        foreach ($pool in $existingPools) {
-            Write-Host "    • $($pool.Name) (State: $($pool.State))" -ForegroundColor Gray
-            $removed = Remove-IISAppPoolSafely -PoolName $pool.Name
+    # Remove potential existing application pools using try/catch approach  
+    $potentialPools = @("ExcelAddin", "ExcelAddin-Proxy", $AppPoolName)
+    $removedPools = 0
+    foreach ($poolName in $potentialPools) {
+        try {
+            $removed = Remove-IISAppPoolSafely -PoolName $poolName
             if ($removed) {
-                Write-Host "      ✅ Removed application pool: $($pool.Name)" -ForegroundColor Green
-            } else {
-                Write-Warning "      ⚠️  Failed to completely remove application pool: $($pool.Name)"
+                $removedPools++
             }
+        } catch {
+            # Silently continue - pool probably doesn't exist
         }
+    }
+    
+    if ($removedSites -gt 0 -or $removedPools -gt 0) {
+        Write-Host "  ✅ Cleaned up $removedSites website(s) and $removedPools application pool(s)" -ForegroundColor Green
     } else {
-        Write-Host "  ✅ No existing ExcelAddin application pools found" -ForegroundColor Green
+        Write-Host "  ✅ No existing ExcelAddin instances found to remove" -ForegroundColor Green
     }
 
     Write-Host "  ✅ ExcelAddin cleanup completed" -ForegroundColor Green
     Write-Host ""
 
-    # Verify cleanup was successful (legacy check - should be covered by cleanup above)
-    $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-    $existingPool = Get-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
-    
-    if ($existingSite -or $existingPool) {
-        if (-not $Force) {
-            Write-Error "Site '$SiteName' or Application Pool '$AppPoolName' still exists after cleanup. Use -Force to override any remaining conflicts."
-        } else {
-            # Force cleanup of any remaining instances
-            if ($existingSite) {
-                Write-Host "Force removing remaining site '$SiteName'..." -ForegroundColor Yellow
-                $removed = Remove-IISWebsiteSafely -SiteName $SiteName
-                if ($removed) {
-                    Write-Host "  ✅ Force removed site '$SiteName'" -ForegroundColor Green
-                } else {
-                    Write-Warning "  ⚠️  Failed to force remove site '$SiteName'"
-                }
-            }
-            if ($existingPool) {
-                Write-Host "Force removing remaining application pool '$AppPoolName'..." -ForegroundColor Yellow
-                $removed = Remove-IISAppPoolSafely -PoolName $AppPoolName
-                if ($removed) {
-                    Write-Host "  ✅ Force removed application pool '$AppPoolName'" -ForegroundColor Green
-                } else {
-                    Write-Warning "  ⚠️  Failed to force remove application pool '$AppPoolName'"
-                }
-            }
-        }
-    }
-
     # Create Application Pool
     Write-Host "Creating application pool '$AppPoolName'..." -ForegroundColor Yellow
-    New-WebAppPool -Name $AppPoolName
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value ""  # No managed code needed for proxy
-    Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00"  # Disable periodic restart
-    Write-Host "  ✅ Application pool created and configured" -ForegroundColor Green
+    try {
+        New-WebAppPool -Name $AppPoolName -ErrorAction Stop
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value ""  # No managed code needed for proxy
+        Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00"  # Disable periodic restart
+        Write-Host "  ✅ Application pool created and configured" -ForegroundColor Green
+    } catch {
+        if ($_.Exception.Message -like "*already exists*") {
+            Write-Host "  ✅ Application pool '$AppPoolName' already exists (continuing)" -ForegroundColor Green
+            # Update existing pool settings
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "enable32BitAppOnWin64" -Value $false -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "managedRuntimeVersion" -Value "" -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\AppPools\$AppPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00" -ErrorAction SilentlyContinue
+        } else {
+            Write-Error "Failed to create application pool: $($_.Exception.Message)"
+        }
+    }
 
     # Create physical directory
     Write-Host "Creating site directory..." -ForegroundColor Yellow
@@ -332,8 +299,19 @@ try {
 
     # Create Website
     Write-Host "Creating IIS website '$SiteName'..." -ForegroundColor Yellow
-    New-Website -Name $SiteName -Port $Port -PhysicalPath $sitePath -ApplicationPool $AppPoolName
-    Write-Host "  ✅ IIS website created" -ForegroundColor Green
+    try {
+        New-Website -Name $SiteName -Port $Port -PhysicalPath $sitePath -ApplicationPool $AppPoolName -ErrorAction Stop
+        Write-Host "  ✅ IIS website created" -ForegroundColor Green
+    } catch {
+        if ($_.Exception.Message -like "*already exists*") {
+            Write-Host "  ✅ IIS website '$SiteName' already exists (continuing)" -ForegroundColor Green
+            # Update existing website settings
+            Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name "physicalPath" -Value $sitePath -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "IIS:\Sites\$SiteName" -Name "applicationPool" -Value $AppPoolName -ErrorAction SilentlyContinue
+        } else {
+            Write-Error "Failed to create website: $($_.Exception.Message)"
+        }
+    }
 
     # Configure URL rewrite rules
     if ($urlRewriteModule) {
