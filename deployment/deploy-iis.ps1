@@ -59,6 +59,64 @@ function Remove-IISWebsiteSafely {
 }
 
 # Helper function to clean up port conflicts
+function Test-SiteConfiguration {
+    param(
+        [string]$SiteName,
+        [string]$Port,
+        [string]$SitePath
+    )
+    
+    Write-Host "Diagnosing site configuration..." -ForegroundColor Yellow
+    
+    # Check if web.config exists and is valid
+    $webConfigPath = Join-Path $SitePath "web.config"
+    if (Test-Path $webConfigPath) {
+        Write-Host "  ✅ web.config file exists" -ForegroundColor Green
+        try {
+            [xml]$webConfig = Get-Content $webConfigPath
+            Write-Host "  ✅ web.config XML is valid" -ForegroundColor Green
+            
+            # Check for duplicate httpProtocol sections
+            $httpProtocolNodes = $webConfig.configuration.'system.webServer'.ChildNodes | Where-Object { $_.Name -eq 'httpProtocol' }
+            if ($httpProtocolNodes.Count -eq 1) {
+                Write-Host "  ✅ Single httpProtocol section found" -ForegroundColor Green
+            } elseif ($httpProtocolNodes.Count -gt 1) {
+                Write-Warning "  ⚠️  Multiple httpProtocol sections found: $($httpProtocolNodes.Count)"
+            }
+        } catch {
+            Write-Warning "  ⚠️  web.config XML validation failed: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Warning "  ⚠️  web.config file not found"
+    }
+    
+    # Check IIS site status
+    try {
+        $site = Get-WebSite -Name $SiteName -ErrorAction SilentlyContinue
+        if ($site) {
+            Write-Host "  ✅ IIS site exists - State: $($site.State)" -ForegroundColor Green
+            Write-Host "  📁 Physical Path: $($site.PhysicalPath)" -ForegroundColor Gray
+            Write-Host "  🌐 Bindings: $($site.Bindings.Collection.bindingInformation -join ', ')" -ForegroundColor Gray
+        } else {
+            Write-Warning "  ⚠️  IIS site not found"
+        }
+    } catch {
+        Write-Warning "  ⚠️  Cannot check IIS site status: $($_.Exception.Message)"
+    }
+    
+    # Check application pool status
+    try {
+        $appPool = Get-WebAppPool -Name $SiteName -ErrorAction SilentlyContinue
+        if ($appPool) {
+            Write-Host "  ✅ Application pool exists - State: $($appPool.State)" -ForegroundColor Green
+        } else {
+            Write-Warning "  ⚠️  Application pool not found"
+        }
+    } catch {
+        Write-Warning "  ⚠️  Cannot check application pool status: $($_.Exception.Message)"
+    }
+}
+
 function Clear-PortConflicts {
     param([int]$Port)
     
@@ -471,13 +529,18 @@ try {
       </outboundRules>
     </rewrite>
     
-    <!-- CORS headers for Excel Add-in compatibility -->
+    <!-- Combined HTTP headers for CORS and security -->
     <httpProtocol>
       <customHeaders>
+        <!-- CORS headers for Excel Add-in compatibility -->
         <add name="Access-Control-Allow-Origin" value="*" />
         <add name="Access-Control-Allow-Methods" value="GET, POST, PUT, DELETE, PATCH, OPTIONS" />
         <add name="Access-Control-Allow-Headers" value="Content-Type, Authorization, X-Requested-With, Accept" />
         <add name="Access-Control-Max-Age" value="86400" />
+        <!-- Security headers -->
+        <add name="X-Content-Type-Options" value="nosniff" />
+        <add name="X-Frame-Options" value="SAMEORIGIN" />
+        <add name="X-XSS-Protection" value="1; mode=block" />
       </customHeaders>
     </httpProtocol>
     
@@ -491,18 +554,18 @@ try {
     
     <!-- Static content compression -->
     <urlCompression doDynamicCompression="true" doStaticCompression="true" />
-    
-    <!-- Security headers -->
-    <httpProtocol>
-      <customHeaders>
-        <add name="X-Content-Type-Options" value="nosniff" />
-        <add name="X-Frame-Options" value="SAMEORIGIN" />
-        <add name="X-XSS-Protection" value="1; mode=block" />
-      </customHeaders>
-    </httpProtocol>
   </system.webServer>
 </configuration>
 "@
+        
+        # Validate the web.config XML before writing
+        try {
+            [xml]$xmlValidation = $webConfigContent
+            Write-Host "  ✅ Web.config XML validation passed" -ForegroundColor Green
+        } catch {
+            Write-Error "Web.config XML validation failed: $($_.Exception.Message)"
+            throw "Invalid web.config generated"
+        }
         
         $webConfigContent | Out-File -FilePath (Join-Path $sitePath "web.config") -Encoding UTF8
         Write-Host "  ✅ URL rewrite rules configured" -ForegroundColor Green
@@ -564,9 +627,15 @@ try {
     
     try {
         Start-Website -Name $SiteName -ErrorAction Stop
-        Write-Host "  ✅ Website started" -ForegroundColor Green
+        Write-Host "  ✅ Website started successfully" -ForegroundColor Green
+        
+        # Run diagnostic to confirm configuration
+        Test-SiteConfiguration -SiteName $SiteName -Port $Port -SitePath $sitePath
     } catch {
         Write-Warning "  ⚠️  Failed to start website: $($_.Exception.Message)"
+        
+        # Run diagnostic to help identify the issue
+        Test-SiteConfiguration -SiteName $SiteName -Port $Port -SitePath $sitePath
         
         # If website start fails, check for port conflicts
         Write-Host "Checking for port conflicts..." -ForegroundColor Yellow
@@ -596,40 +665,128 @@ try {
         }
     }
     
-    # Wait a moment for services to start
+    # Wait a moment for services to start, but don't wait too long to avoid hanging
+    Write-Host "Waiting for services to initialize..." -ForegroundColor Yellow
     Start-Sleep -Seconds 3
 
-    # Test the proxy
+    # Test the proxy with improved error handling
     Write-Host "Testing IIS proxy..." -ForegroundColor Yellow
-    Start-Sleep -Seconds 2
     
     $testResults = @()
     
-    # Test main site
+    # Test main site with shorter timeout and better error handling
+    Write-Host "  Testing main site connectivity..." -ForegroundColor Gray
     try {
         $protocol = if ($Port -eq 443 -or $Port -eq 9443) { "https" } else { "http" }
         $testUrl = "${protocol}://localhost:${Port}"
-        $response = Invoke-WebRequest -Uri $testUrl -TimeoutSec 10 -UseBasicParsing -ErrorAction SilentlyContinue
-        if ($response.StatusCode -eq 200) {
-            $testResults += "✅ Main site responding (HTTP $($response.StatusCode))"
+        
+        # Use shorter timeout and ignore SSL errors for testing
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "IIS-Deployment-Test")
+        
+        # Set timeout to 5 seconds to prevent hanging
+        $response = $null
+        $testJob = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                $request = [System.Net.WebRequest]::Create($url)
+                $request.Timeout = 5000
+                $request.Method = "GET"
+                if ($url.StartsWith("https://")) {
+                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+                    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+                }
+                $response = $request.GetResponse()
+                return @{
+                    StatusCode = [int]$response.StatusCode
+                    Success = $true
+                }
+            } catch {
+                return @{
+                    StatusCode = 0
+                    Success = $false
+                    Error = $_.Exception.Message
+                }
+            }
+        } -ArgumentList $testUrl
+        
+        # Wait up to 8 seconds for the test to complete
+        $testCompleted = Wait-Job $testJob -Timeout 8
+        if ($testCompleted) {
+            $result = Receive-Job $testJob
+            Remove-Job $testJob
+            
+            if ($result.Success -and $result.StatusCode -eq 200) {
+                $testResults += "✅ Main site responding (HTTP $($result.StatusCode))"
+            } elseif ($result.Success) {
+                $testResults += "⚠️  Main site returned HTTP $($result.StatusCode)"
+            } else {
+                $testResults += "❌ Main site test failed: $($result.Error)"
+            }
         } else {
-            $testResults += "⚠️  Main site returned HTTP $($response.StatusCode)"
+            Remove-Job $testJob -Force
+            $testResults += "❌ Main site test timed out (site may not be properly configured)"
         }
+        
+        $webClient.Dispose()
     } catch {
         $testResults += "❌ Main site test failed: $($_.Exception.Message)"
     }
     
-    # Test if backend and frontend services are running (for proxy functionality)
+    # Test backend and frontend services with shorter timeouts
+    Write-Host "  Testing backend/frontend service connectivity..." -ForegroundColor Gray
     try {
-        $frontendTest = Invoke-WebRequest -Uri "$FrontendUrl/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction SilentlyContinue
-        $testResults += "✅ Frontend service responding (HTTP $($frontendTest.StatusCode))"
+        $frontendJob = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                $request = [System.Net.WebRequest]::Create("$url/health")
+                $request.Timeout = 3000
+                $response = $request.GetResponse()
+                return @{ Success = $true; StatusCode = [int]$response.StatusCode }
+            } catch {
+                return @{ Success = $false; Error = $_.Exception.Message }
+            }
+        } -ArgumentList $FrontendUrl
+        
+        if (Wait-Job $frontendJob -Timeout 5) {
+            $frontendResult = Receive-Job $frontendJob
+            if ($frontendResult.Success) {
+                $testResults += "✅ Frontend service responding (HTTP $($frontendResult.StatusCode))"
+            } else {
+                $testResults += "⚠️  Frontend service not responding - proxy forwarding may fail"
+            }
+        } else {
+            $testResults += "⚠️  Frontend service test timed out - proxy forwarding may fail"
+        }
+        Remove-Job $frontendJob -Force
     } catch {
         $testResults += "⚠️  Frontend service not responding - proxy forwarding may fail"
     }
     
     try {
-        $backendTest = Invoke-WebRequest -Uri "$BackendUrl/api/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction SilentlyContinue
-        $testResults += "✅ Backend service responding (HTTP $($backendTest.StatusCode))"
+        $backendJob = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                $request = [System.Net.WebRequest]::Create("$url/api/health")
+                $request.Timeout = 3000
+                $response = $request.GetResponse()
+                return @{ Success = $true; StatusCode = [int]$response.StatusCode }
+            } catch {
+                return @{ Success = $false; Error = $_.Exception.Message }
+            }
+        } -ArgumentList $BackendUrl
+        
+        if (Wait-Job $backendJob -Timeout 5) {
+            $backendResult = Receive-Job $backendJob
+            if ($backendResult.Success) {
+                $testResults += "✅ Backend service responding (HTTP $($backendResult.StatusCode))"
+            } else {
+                $testResults += "⚠️  Backend service not responding - API proxy forwarding may fail"
+            }
+        } else {
+            $testResults += "⚠️  Backend service test timed out - API proxy forwarding may fail"
+        }
+        Remove-Job $backendJob -Force
     } catch {
         $testResults += "⚠️  Backend service not responding - API proxy forwarding may fail"
     }
