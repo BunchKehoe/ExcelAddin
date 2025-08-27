@@ -1,62 +1,62 @@
 {
-  "allowCustomDataForDataTypeAny": true,
-  "functions": [
-    {
-      "description": "Takes five cells as input and adds them together",
-      "id": "PC.IRR",
-      "name": "PC.IRR",
-      "parameters": [
+    "allowCustomDataForDataTypeAny": true,
+    "functions": [
         {
-          "description": "First cell value",
-          "name": "cell1",
-          "type": "number"
+            "description": "Takes five cells as input and adds them together",
+            "id": "PC.IRR",
+            "name": "PC.IRR",
+            "parameters": [
+                {
+                    "description": "First cell value",
+                    "name": "cell1",
+                    "type": "number"
+                },
+                {
+                    "description": "Second cell value",
+                    "name": "cell2",
+                    "type": "number"
+                },
+                {
+                    "description": "Third cell value",
+                    "name": "cell3",
+                    "type": "number"
+                },
+                {
+                    "description": "Fourth cell value",
+                    "name": "cell4",
+                    "type": "number"
+                },
+                {
+                    "description": "Fifth cell value",
+                    "name": "cell5",
+                    "type": "number"
+                }
+            ],
+            "result": {
+                "type": "number"
+            }
         },
         {
-          "description": "Second cell value",
-          "name": "cell2",
-          "type": "number"
-        },
-        {
-          "description": "Third cell value",
-          "name": "cell3",
-          "type": "number"
-        },
-        {
-          "description": "Fourth cell value",
-          "name": "cell4",
-          "type": "number"
-        },
-        {
-          "description": "Fifth cell value",
-          "name": "cell5",
-          "type": "number"
+            "description": "Joins cells from a range into a single string with specified delimiter",
+            "id": "PC.JOINCELLS",
+            "name": "PC.JOINCELLS",
+            "parameters": [
+                {
+                    "description": "The range of cells to join",
+                    "dimensionality": "matrix",
+                    "name": "range",
+                    "type": "any"
+                },
+                {
+                    "description": "The delimiter to use (default comma with space)",
+                    "name": "delimiter",
+                    "optional": true,
+                    "type": "string"
+                }
+            ],
+            "result": {
+                "type": "string"
+            }
         }
-      ],
-      "result": {
-        "type": "number"
-      }
-    },
-    {
-      "description": "Joins cells from a range into a single string with specified delimiter",
-      "id": "PC.JOINCELLS",
-      "name": "PC.JOINCELLS",
-      "parameters": [
-        {
-          "description": "The range of cells to join",
-          "dimensionality": "matrix",
-          "name": "range",
-          "type": "any"
-        },
-        {
-          "description": "The delimiter to use (default comma with space)",
-          "name": "delimiter",
-          "optional": true,
-          "type": "string"
-        }
-      ],
-      "result": {
-        "type": "string"
-      }
-    }
-  ]
+    ]
 }

@@ -1,12 +1,5 @@
 /* global Office, CustomFunctions */
 
-// Type declarations for Excel Custom Functions
-interface CustomFunctionsNamespace {
-  associate(id: string, functionObject: Function): void;
-}
-
-declare const CustomFunctions: CustomFunctionsNamespace;
-
 /**
  * PC.IRR - Takes five cells as input and adds them together
  * @customfunction PC.IRR
@@ -72,20 +65,7 @@ function JOINCELLS(range: any[][], delimiter: string = ", "): string {
   return result;
 }
 
-// Initialize when Office is ready
+// Register the functions with Office
 Office.onReady(() => {
   console.log('Prime Capital Custom Functions ready');
-  
-  // Register functions with Excel's Custom Functions runtime
-  if (typeof CustomFunctions !== 'undefined') {
-    try {
-      CustomFunctions.associate('PC.IRR', IRR);
-      CustomFunctions.associate('PC.JOINCELLS', JOINCELLS);
-      console.log('Custom Functions successfully registered: PC.IRR and PC.JOINCELLS');
-    } catch (error) {
-      console.error('Error registering custom functions:', error);
-    }
-  } else {
-    console.warn('CustomFunctions API not available');
-  }
 });

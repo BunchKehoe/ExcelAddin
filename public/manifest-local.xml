@@ -49,8 +49,15 @@ Uses localhost:3000 for all resource URLs.
   
   <!-- Version overrides for different Office versions -->
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <!-- Use shared runtime for Excel add-ins with custom functions -->
+    <Runtimes>
+      <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
+    </Runtimes>
     <Hosts>
       <Host xsi:type="Workbook">
+        <Runtimes>
+          <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
+        </Runtimes>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
@@ -91,7 +98,7 @@ Uses localhost:3000 for all resource URLs.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
-          <!-- Custom Functions -->
+          <!-- Custom Functions with Shared Runtime -->
           <ExtensionPoint xsi:type="CustomFunctions">
             <Script>
               <SourceLocation resid="CustomFunctions.Script.Url"/>
