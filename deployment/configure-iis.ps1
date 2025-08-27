@@ -50,7 +50,7 @@ if ($existingSite) {
 }
 
 # Remove existing app pool if it exists
-$existingPool = Get-IISAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+$existingPool = Get-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
 if ($existingPool) {
     if ($Force) {
         Write-Host "Removing existing application pool..." -ForegroundColor Yellow

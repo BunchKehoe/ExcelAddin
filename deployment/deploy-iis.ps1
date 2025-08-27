@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 function Remove-IISAppPoolSafely {
     param([string]$PoolName)
     
-    $pool = Get-IISAppPool -Name $PoolName -ErrorAction SilentlyContinue
+    $pool = Get-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
     if ($pool) {
         try {
             if ($pool.State -eq "Started") {
@@ -29,7 +29,7 @@ function Remove-IISAppPoolSafely {
             Remove-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
             
             # Verify removal
-            $verifyPool = Get-IISAppPool -Name $PoolName -ErrorAction SilentlyContinue
+            $verifyPool = Get-WebAppPool -Name $PoolName -ErrorAction SilentlyContinue
             if (-not $verifyPool) {
                 return $true
             } else {
@@ -138,7 +138,7 @@ try {
     }
     
     # Find and remove existing application pools
-    $existingPools = Get-IISAppPool | Where-Object { $_.Name -like "*ExcelAddin*" }
+    $existingPools = Get-WebAppPool | Where-Object { $_.Name -like "*ExcelAddin*" }
     if ($existingPools) {
         Write-Host "  Found $($existingPools.Count) existing ExcelAddin application pool(s) to remove:" -ForegroundColor Yellow
         foreach ($pool in $existingPools) {
@@ -159,7 +159,7 @@ try {
 
     # Verify cleanup was successful (legacy check - should be covered by cleanup above)
     $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
-    $existingPool = Get-IISAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+    $existingPool = Get-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
     
     if ($existingSite -or $existingPool) {
         if (-not $Force) {
