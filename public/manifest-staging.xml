@@ -50,22 +50,15 @@ Update the domain names and GUID before deployment.
   
   <!-- Version overrides for different Office versions -->
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
-    <!-- Use shared runtime for Excel add-ins with custom functions -->
-    <Runtimes>
-      <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
-    </Runtimes>
     <Hosts>
       <Host xsi:type="Workbook">
-        <Runtimes>
-          <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
-        </Runtimes>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
             <Description resid="GetStarted.Description"/>
             <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
           </GetStarted>
-          <!-- Function file for custom functions -->
+          <!-- Function file for commands -->
           <FunctionFile resid="Commands.Url"/>
           
           <!-- Extension points -->
@@ -99,19 +92,6 @@ Update the domain names and GUID before deployment.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
-          <!-- Custom Functions with Shared Runtime -->
-          <ExtensionPoint xsi:type="CustomFunctions">
-            <Script>
-              <SourceLocation resid="CustomFunctions.Script.Url"/>
-            </Script>
-            <Page>
-              <SourceLocation resid="CustomFunctions.Page.Url"/>
-            </Page>
-            <Metadata>
-              <SourceLocation resid="Functions.Metadata.Url"/>
-            </Metadata>
-            <Namespace resid="CustomFunctions.Namespace"/>
-          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -126,16 +106,12 @@ Update the domain names and GUID before deployment.
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs81t.intranet.local:9443/excellence"/>
         <bt:Url id="Commands.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/commands.html"/>
-        <bt:Url id="CustomFunctions.Script.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/customfunctions.js"/>
-        <bt:Url id="CustomFunctions.Page.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/customfunctions.html"/>
-        <bt:Url id="Functions.Metadata.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/functions.json"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with Prime Capital"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="Prime Capital"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Taskpane"/>
-        <bt:String id="CustomFunctions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your Prime Capital add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
