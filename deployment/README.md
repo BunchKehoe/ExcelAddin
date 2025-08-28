@@ -29,7 +29,7 @@ This guide covers the deployment of the Excel Add-in using Vite build system wit
 
 ## Deployment Scripts
 
-The deployment system provides four streamlined PowerShell scripts:
+The deployment system provides four streamlined PowerShell scripts with **automatic environment detection**:
 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
@@ -38,35 +38,51 @@ The deployment system provides four streamlined PowerShell scripts:
 | **deploy-iis.ps1** | Configure IIS reverse proxy | Initial deployment or IIS configuration changes |
 | **troubleshooting.ps1** | Comprehensive diagnostics and fixes | When issues occur or for health checks |
 
+### Environment Auto-Detection
+
+All deployment scripts now automatically detect the correct environment based on the current hostname:
+
+| Hostname Pattern | Environment | .env File Used | Server FQDN |
+|------------------|-------------|----------------|-------------|
+| `server-vs84*` | **production** | `.env.production` | `server-vs84.intranet.local` |
+| `server-vs81t*` | **staging** | `.env.staging` | `server-vs81t.intranet.local` |
+| All others | **development** | `.env.development` | `localhost` |
+
+**Usage Examples:**
+```powershell
+# Auto-detect environment (recommended)
+.\deploy-backend.ps1          # Uses hostname to select .env file
+.\deploy-frontend.ps1         # Auto-detects environment
+.\deploy-iis.ps1             # Auto-detects ServerFQDN
+
+# Override auto-detection if needed
+.\deploy-backend.ps1 -Environment production
+.\deploy-frontend.ps1 -Environment staging
+.\deploy-iis.ps1 -ServerFQDN "custom.domain.com"
+```
+
 ### Quick Start Deployment
 
-**1. Complete Deployment (Recommended)**
+**1. Complete Deployment (Recommended) - Auto-Detection**
 ```powershell
 # Run as Administrator in PowerShell
 cd deployment
 
-# Deploy backend service
-.\deploy-backend.ps1 -Environment staging
-
-# Deploy frontend service  
-.\deploy-frontend.ps1 -Environment staging
-
-# Configure IIS reverse proxy
-.\deploy-iis.ps1
+# Auto-detect environment and deploy everything
+.\deploy-backend.ps1          # Automatically selects correct .env file
+.\deploy-frontend.ps1         # Automatically detects environment
+.\deploy-iis.ps1             # Automatically detects ServerFQDN
 
 # Verify deployment
 .\troubleshooting.ps1 -TestAll
 ```
 
-**2. Environment-Specific Deployment**
+**2. Manual Environment Override (If Needed)**
 ```powershell
-# For staging environment
+# Force specific environment
 .\deploy-backend.ps1 -Environment staging
 .\deploy-frontend.ps1 -Environment staging
-
-# For production environment  
-.\deploy-backend.ps1 -Environment production
-.\deploy-frontend.ps1 -Environment production
+.\deploy-iis.ps1 -ServerFQDN "server-vs81t.intranet.local"
 ```
 
 ## Architecture
@@ -100,26 +116,33 @@ Excel Client → IIS (9443) → Frontend Service (3000)
 ### Backend Service Deployment (deploy-backend.ps1)
 
 **What it does**:
-1. Installs Python dependencies via Poetry
-2. Creates/updates NSSM Windows service
-3. Configures service to start automatically
-4. Sets up logging and error handling
-5. Applies environment-specific configuration
+1. **Auto-detects environment** based on hostname or uses specified environment
+2. **Selects correct .env file** (`.env.development`, `.env.staging`, or `.env.production`)
+3. Installs Python dependencies via Poetry
+4. Creates/updates NSSM Windows service
+5. Configures service to start automatically
+6. Sets up logging and error handling
+7. Applies environment-specific configuration
 
 **Options**:
 ```powershell
-# Basic deployment
+# Auto-detect environment (recommended)
 .\deploy-backend.ps1
 
-# Specify environment 
+# Force specific environment 
 .\deploy-backend.ps1 -Environment production
 
-# Force restart service
-.\deploy-backend.ps1 -Force
-
-# Enable verbose logging
-.\deploy-backend.ps1 -Verbose
+# Additional options
+.\deploy-backend.ps1 -Force          # Force restart service
+.\deploy-backend.ps1 -SkipInstall    # Skip dependency installation  
+.\deploy-backend.ps1 -Debug          # Enable verbose logging
 ```
+
+**Environment File Selection**:
+- **Auto-detection**: Script examines hostname and selects appropriate `.env.{environment}` file
+- **Manual override**: Use `-Environment` parameter to force specific environment
+- **Validation**: Script ensures the required `.env` file exists before deployment
+- **Error handling**: Deployment stops with helpful error if environment file is missing
 
 **Service Configuration**:
 - **Service Name**: `ExcelAddin-Backend`
@@ -131,25 +154,25 @@ Excel Client → IIS (9443) → Frontend Service (3000)
 ### Frontend Service Deployment (deploy-frontend.ps1)
 
 **What it does**:
-1. Builds optimized Vite bundle for target environment
-2. Creates Express.js server for static file serving
-3. Installs/updates Windows service via node-windows
-4. Configures service for automatic startup
-5. Sets up request logging and error handling
+1. **Auto-detects environment** based on hostname or uses specified environment
+2. Builds optimized Vite bundle for target environment
+3. Creates Express.js server for static file serving
+4. Installs/updates Windows service via node-windows
+5. Configures service for automatic startup
+6. Sets up request logging and error handling
 
 **Options**:
 ```powershell
-# Basic deployment
+# Auto-detect environment (recommended)
 .\deploy-frontend.ps1
 
-# Specify environment
+# Force specific environment
 .\deploy-frontend.ps1 -Environment staging
 
-# Skip build step (use existing dist/)
-.\deploy-frontend.ps1 -SkipBuild
-
-# Enable development mode logging
-.\deploy-frontend.ps1 -Debug
+# Additional options
+.\deploy-frontend.ps1 -SkipBuild      # Skip build step (use existing dist/)
+.\deploy-frontend.ps1 -Force          # Force service restart
+.\deploy-frontend.ps1 -Debug          # Enable development mode logging
 ```
 
 **Service Configuration**:
@@ -162,11 +185,26 @@ Excel Client → IIS (9443) → Frontend Service (3000)
 ### IIS Proxy Configuration (deploy-iis.ps1)
 
 **What it does**:
-1. Creates IIS application pool for ExcelAddin
-2. Configures website on port 9443 with SSL
-3. Sets up URL rewrite rules for frontend/backend routing
-4. Applies security headers and performance optimizations
-5. Configures SSL certificate binding
+1. **Auto-detects ServerFQDN** based on hostname or uses specified server
+2. Creates IIS application pool for ExcelAddin
+3. Configures website on port 9443 with SSL
+4. Sets up URL rewrite rules for frontend/backend routing
+5. Applies security headers and performance optimizations
+6. Configures SSL certificate binding
+
+**Options**:
+```powershell
+# Auto-detect server FQDN (recommended)
+.\deploy-iis.ps1
+
+# Force specific server
+.\deploy-iis.ps1 -ServerFQDN "custom.domain.com"
+
+# Additional options
+.\deploy-iis.ps1 -Force              # Force overwrite existing configuration
+.\deploy-iis.ps1 -Debug              # Enable verbose logging
+.\deploy-iis.ps1 -Port 8443          # Use different port
+```
 
 **Key IIS Configuration**:
 ```xml

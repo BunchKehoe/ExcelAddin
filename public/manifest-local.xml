@@ -49,8 +49,15 @@ Uses localhost:3000 for all resource URLs.
   
   <!-- Version overrides for different Office versions -->
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <!-- Use shared runtime for Excel add-ins with custom functions -->
+    <Runtimes>
+      <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
+    </Runtimes>
     <Hosts>
       <Host xsi:type="Workbook">
+        <Runtimes>
+          <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
+        </Runtimes>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
@@ -91,13 +98,13 @@ Uses localhost:3000 for all resource URLs.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
-          <!-- Custom Functions -->
+          <!-- Custom Functions with Shared Runtime -->
           <ExtensionPoint xsi:type="CustomFunctions">
             <Script>
-              <SourceLocation resid="Commands.Url"/>
+              <SourceLocation resid="CustomFunctions.Script.Url"/>
             </Script>
             <Page>
-              <SourceLocation resid="Commands.Url"/>
+              <SourceLocation resid="CustomFunctions.Page.Url"/>
             </Page>
             <Metadata>
               <SourceLocation resid="Functions.Metadata.Url"/>
@@ -118,6 +125,8 @@ Uses localhost:3000 for all resource URLs.
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000"/>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html"/>
+        <bt:Url id="CustomFunctions.Script.Url" DefaultValue="https://localhost:3000/customfunctions.js"/>
+        <bt:Url id="CustomFunctions.Page.Url" DefaultValue="https://localhost:3000/customfunctions.html"/>
         <bt:Url id="Functions.Metadata.Url" DefaultValue="https://localhost:3000/functions.json"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>

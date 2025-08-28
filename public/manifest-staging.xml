@@ -50,8 +50,15 @@ Update the domain names and GUID before deployment.
   
   <!-- Version overrides for different Office versions -->
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <!-- Use shared runtime for Excel add-ins with custom functions -->
+    <Runtimes>
+      <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
+    </Runtimes>
     <Hosts>
       <Host xsi:type="Workbook">
+        <Runtimes>
+          <Runtime resid="CustomFunctions.Page.Url" lifetime="long" />
+        </Runtimes>
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
@@ -92,13 +99,13 @@ Update the domain names and GUID before deployment.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
-          <!-- Custom Functions -->
+          <!-- Custom Functions with Shared Runtime -->
           <ExtensionPoint xsi:type="CustomFunctions">
             <Script>
-              <SourceLocation resid="Commands.Url"/>
+              <SourceLocation resid="CustomFunctions.Script.Url"/>
             </Script>
             <Page>
-              <SourceLocation resid="Commands.Url"/>
+              <SourceLocation resid="CustomFunctions.Page.Url"/>
             </Page>
             <Metadata>
               <SourceLocation resid="Functions.Metadata.Url"/>
@@ -119,6 +126,8 @@ Update the domain names and GUID before deployment.
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs81t.intranet.local:9443/excellence"/>
         <bt:Url id="Commands.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/commands.html"/>
+        <bt:Url id="CustomFunctions.Script.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/customfunctions.js"/>
+        <bt:Url id="CustomFunctions.Page.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/customfunctions.html"/>
         <bt:Url id="Functions.Metadata.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/functions.json"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://server-vs81t.intranet.local:9443/excellence/taskpane.html"/>
       </bt:Urls>
