@@ -80,12 +80,10 @@ async def download_raw_data(request_data: RawDataDownloadRequest):
         # Check if fund is required for this catalog
         if has_fund_filtering(request_data.catalog):
             if not request_data.fund:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        'success': False,
-                        'error': 'Fund is required for this catalog'
-                    }
+                return DataResponse(
+                    success=False,
+                    error='Fund is required for this catalog',
+                    data=[]
                 )
         
         # Create request DTO - use empty string for fund if not available
@@ -125,8 +123,6 @@ async def download_raw_data(request_data: RawDataDownloadRequest):
                 data=data_list
             )
     
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error downloading raw data: {e}")
         return DataResponse(
