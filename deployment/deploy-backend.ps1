@@ -1,5 +1,5 @@
 # ExcelAddin Backend Deployment Script
-# Deploys Python Flask backend as NSSM service for Windows Server 10
+# Deploys Python FastAPI backend as NSSM service for Windows Server 10
 #
 # ENVIRONMENT AUTO-DETECTION:
 # - server-vs84*  -> production
@@ -74,12 +74,29 @@ Write-Host ""
 # Check prerequisites
 Write-Host "Checking prerequisites..." -ForegroundColor Yellow
 
-# Check Python
-$pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-if ($pythonCmd) {
-    $pythonPath = $pythonCmd.Source
+# Check for Poetry and get the virtual environment Python path
+$poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
+if ($poetryCmd) {
+    Write-Host "  Using Poetry for virtual environment" -ForegroundColor Green
+    Set-Location $BackendPath
+    
+    # Get the virtual environment path from Poetry
+    $venvPath = poetry env info --path 2>$null
+    if ($venvPath -and (Test-Path $venvPath)) {
+        $pythonPath = Join-Path $venvPath "Scripts\python.exe"
+        if (Test-Path $pythonPath) {
+            Write-Host "  Poetry virtual environment: $venvPath" -ForegroundColor Green
+            Write-Host "  Poetry Python executable: $pythonPath" -ForegroundColor Green
+        } else {
+            Write-Error "Poetry virtual environment Python not found at: $pythonPath"
+        }
+    } else {
+        Write-Warning "Poetry virtual environment not found, using system Python"
+        $pythonPath = $pythonCmd.Source
+    }
 } else {
-    Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
+    Write-Host "  Using system Python (Poetry not found)" -ForegroundColor Yellow
+    $pythonPath = $pythonCmd.Source
 }
 $pythonVersion = python --version 2>&1
 Write-Host "  Python: $pythonVersion" -ForegroundColor Green
@@ -248,8 +265,8 @@ nssm set $ServiceName Description $ServiceDescription
 nssm set $ServiceName AppDirectory $BackendPath
 nssm set $ServiceName Start SERVICE_AUTO_START
 
-# Set environment variables
-nssm set $ServiceName AppEnvironmentExtra "FLASK_ENV=$Environment;PORT=$Port;HOST=127.0.0.1;ENVIRONMENT=$Environment"
+# Set environment variables (FastAPI-specific)
+nssm set $ServiceName AppEnvironmentExtra "ENVIRONMENT=$Environment;PORT=$Port;HOST=0.0.0.0;DEBUG=false"
 
 # Configure logging
 nssm set $ServiceName AppStdout "$LogDir\backend-stdout.log"
@@ -268,9 +285,38 @@ if ($Debug) {
     nssm dump $ServiceName
 }
 
-# Start service
+# Start service with enhanced error reporting
 Write-Host "Starting service..." -ForegroundColor Yellow
-Start-Service -Name $ServiceName
+try {
+    Start-Service -Name $ServiceName -ErrorAction Stop
+    Write-Host "Service start command executed successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to start service: $($_.Exception.Message)"
+    Write-Host "Checking service logs for more details..." -ForegroundColor Yellow
+    
+    # Check if log files exist and show recent entries
+    $stdoutLog = "$LogDir\backend-stdout.log"
+    $stderrLog = "$LogDir\backend-stderr.log"
+    $serviceLog = "$LogDir\service-startup.log"
+    
+    if (Test-Path $stderrLog) {
+        Write-Host "`nRecent stderr log entries:" -ForegroundColor Red
+        Get-Content $stderrLog -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    }
+    
+    if (Test-Path $serviceLog) {
+        Write-Host "`nRecent service startup log entries:" -ForegroundColor Yellow
+        Get-Content $serviceLog -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+    }
+    
+    # Show service status
+    $failedService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($failedService) {
+        Write-Host "`nService status: $($failedService.Status)" -ForegroundColor Red
+    }
+    
+    exit 1
+}
 
 # Wait for service to start with status checking
 $timeout = 20
@@ -281,12 +327,36 @@ do {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 } while ((-not $service -or $service.Status -ne "Running") -and $elapsed -lt $timeout)
 
-# Verify service status
+# Verify service status with enhanced debugging
+$service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $service -or $service.Status -ne "Running") {
-    Write-Error "Service failed to start within $timeout seconds. Check logs at: $LogDir"
+    Write-Error "Service failed to start within $timeout seconds."
     if ($service) {
         Write-Host "  Current Status: $($service.Status)" -ForegroundColor Red
     }
+    
+    Write-Host "`nTroubleshooting information:" -ForegroundColor Yellow
+    Write-Host "  Service logs directory: $LogDir" -ForegroundColor Cyan
+    Write-Host "  Backend directory: $BackendPath" -ForegroundColor Cyan
+    Write-Host "  Python executable: $pythonPath" -ForegroundColor Cyan
+    Write-Host "  Service script: $ServiceScript" -ForegroundColor Cyan
+    
+    # Show recent log entries if available
+    $logs = @("$LogDir\backend-stderr.log", "$LogDir\service-startup.log", "$LogDir\backend-stdout.log")
+    foreach ($logFile in $logs) {
+        if (Test-Path $logFile) {
+            $logName = Split-Path $logFile -Leaf
+            Write-Host "`nRecent entries from $logName:" -ForegroundColor Yellow
+            Get-Content $logFile -Tail 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+        }
+    }
+    
+    Write-Host "`nManual troubleshooting steps:" -ForegroundColor Yellow
+    Write-Host "  1. Check if Poetry virtual environment is set up: poetry env info" -ForegroundColor Gray
+    Write-Host "  2. Test manual run: cd '$BackendPath' && python run.py" -ForegroundColor Gray
+    Write-Host "  3. Check dependencies: poetry install" -ForegroundColor Gray
+    Write-Host "  4. View full logs: Get-Content '$LogDir\backend-stderr.log'" -ForegroundColor Gray
+    
     exit 1
 }
 
