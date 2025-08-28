@@ -67,12 +67,20 @@ $LogDir = "C:\Logs\ExcelAddin"
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  ExcelAddin Backend Deployment (NSSM)" -ForegroundColor Green  
-Write-Host "  Environment: $Environment ($(if ([string]::IsNullOrEmpty($PSBoundParameters['Environment'])) { 'auto-detected' } else { 'specified' }))" -ForegroundColor Green
+if ([string]::IsNullOrEmpty($PSBoundParameters['Environment'])) {
+    $envSource = "auto-detected"
+} else {
+    $envSource = "specified"
+}
+Write-Host "  Environment: $Environment ($envSource)" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
 # Check prerequisites
 Write-Host "Checking prerequisites..." -ForegroundColor Yellow
+
+# Initialize Python path variable
+$pythonPath = ""
 
 # Check for Poetry and get the virtual environment Python path
 $poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
@@ -81,26 +89,32 @@ if ($poetryCmd) {
     Set-Location $BackendPath
     
     # Get the virtual environment path from Poetry
-    $venvPath = poetry env info --path 2>$null
+    $venvPath = ""
+    try {
+        $venvPath = poetry env info --path 2>$null
+    } catch {
+        $venvPath = ""
+    }
+    
     if ($venvPath -and (Test-Path $venvPath)) {
-        $pythonPath = Join-Path $venvPath "Scripts\python.exe"
-        if (Test-Path $pythonPath) {
+        $poetryPythonPath = Join-Path $venvPath "Scripts\python.exe"
+        if (Test-Path $poetryPythonPath) {
+            $pythonPath = $poetryPythonPath
             Write-Host "  Poetry virtual environment: $venvPath" -ForegroundColor Green
             Write-Host "  Poetry Python executable: $pythonPath" -ForegroundColor Green
         } else {
-            Write-Error "Poetry virtual environment Python not found at: $pythonPath"
+            Write-Warning "Poetry virtual environment Python not found at: $poetryPythonPath"
+            $pythonPath = ""
         }
     } else {
-        Write-Warning "Poetry virtual environment not found, using system Python"
-        $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-        if ($pythonCmd) {
-            $pythonPath = $pythonCmd.Source
-        } else {
-            Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
-        }
+        Write-Warning "Poetry virtual environment not found"
+        $pythonPath = ""
     }
-} else {
-    Write-Host "  Using system Python (Poetry not found)" -ForegroundColor Yellow
+}
+
+# Fall back to system Python if Poetry not available or venv not found
+if ([string]::IsNullOrEmpty($pythonPath)) {
+    Write-Host "  Using system Python" -ForegroundColor Yellow
     $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
     if ($pythonCmd) {
         $pythonPath = $pythonCmd.Source
@@ -108,17 +122,23 @@ if ($poetryCmd) {
         Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
     }
 }
-$pythonVersion = python --version 2>&1
-Write-Host "  Python: $pythonVersion" -ForegroundColor Green
+
+# Verify Python works
+try {
+    $pythonVersion = & $pythonPath --version 2>&1
+    Write-Host "  Python: $pythonVersion" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to execute Python at: $pythonPath"
+}
 
 # Check NSSM
 $nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
 if ($nssmCmd) {
     $nssmPath = $nssmCmd.Source
+    Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
 } else {
     Write-Error "NSSM not found. Please install NSSM and add to PATH."
 }
-Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
 
 # Verify paths
 Write-Host "Verifying paths..." -ForegroundColor Yellow
@@ -145,18 +165,18 @@ Write-Host "  Source file: $envSourceFile" -ForegroundColor Cyan
 Write-Host "  Target file: $envTargetFile" -ForegroundColor Cyan
 
 if (Test-Path $envSourceFile) {
-    Write-Host "  ✓ Found environment file for '$Environment'" -ForegroundColor Green
+    Write-Host "  Found environment file for '$Environment'" -ForegroundColor Green
     Write-Host "  Copying $envSourceFile to $envTargetFile" -ForegroundColor Green
     Copy-Item $envSourceFile $envTargetFile -Force
     
     # Verify the copy was successful
     if (Test-Path $envTargetFile) {
-        Write-Host "  ✓ Environment configuration applied successfully" -ForegroundColor Green
+        Write-Host "  Environment configuration applied successfully" -ForegroundColor Green
     } else {
         Write-Error "Failed to copy environment file to $envTargetFile"
     }
 } else {
-    Write-Error "Environment file not found: $envSourceFile`nAvailable .env files in $BackendPath`:"
+    Write-Error "Environment file not found: $envSourceFile`nAvailable .env files in $BackendPath :"
     Get-ChildItem $BackendPath -Name ".env.*" | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
     Write-Host ""
     Write-Host "Please ensure you have a .env.$Environment file or specify a different environment with -Environment parameter" -ForegroundColor Red
@@ -172,8 +192,7 @@ if (-not (Test-Path $LogDir)) {
 }
 
 # Check if port is in use (skip backend itself)
-$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
-    Where-Object { $_.State -eq "Listen" }
+$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq "Listen" }
 if ($existingProcess) {
     $processId = $existingProcess.OwningProcess
     $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
@@ -241,7 +260,6 @@ if (-not $SkipInstall) {
     # Check for Poetry first (preferred), then pip
     $poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
     if ($poetryCmd) {
-        $poetryPath = $poetryCmd.Source
         Write-Host "  Using Poetry for dependency management" -ForegroundColor Green
         poetry install
         if ($LASTEXITCODE -ne 0) {
@@ -356,7 +374,7 @@ if (-not $service -or $service.Status -ne "Running") {
     foreach ($logFile in $logs) {
         if (Test-Path $logFile) {
             $logName = Split-Path $logFile -Leaf
-            Write-Host "`nRecent entries from ${logName}:" -ForegroundColor Yellow
+            Write-Host "`nRecent entries from $logName" -ForegroundColor Yellow
             Get-Content $logFile -Tail 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
         }
     }
