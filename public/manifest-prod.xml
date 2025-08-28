@@ -92,6 +92,20 @@ Update the domain names and GUID before deployment.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          
+          <!-- Custom Functions Extension Point -->
+          <ExtensionPoint xsi:type="CustomFunctions">
+            <Script>
+              <SourceLocation resid="Functions.Script.Url"/>
+            </Script>
+            <Page>
+              <SourceLocation resid="Functions.Page.Url"/>
+            </Page>
+            <Metadata>
+              <SourceLocation resid="Functions.Metadata.Url"/>
+            </Metadata>
+            <Namespace resid="Functions.Namespace"/>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -107,11 +121,15 @@ Update the domain names and GUID before deployment.
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs84.intranet.local:9443/excellence"/>
         <bt:Url id="Commands.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/commands.html"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/taskpane.html"/>
+        <bt:Url id="Functions.Script.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/functions.html"/>
+        <bt:Url id="Functions.Page.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/functions.html"/>
+        <bt:Url id="Functions.Metadata.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/functions.json"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with Prime Capital"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="Prime Capital"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Taskpane"/>
+        <bt:String id="Functions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your Prime Capital add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>

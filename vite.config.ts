@@ -49,7 +49,8 @@ export default defineConfig(({ command, mode }) => {
       rollupOptions: {
         input: {
           taskpane: resolve(__dirname, 'taskpane.html'),
-          commands: resolve(__dirname, 'commands.html')
+          commands: resolve(__dirname, 'commands.html'),
+          functions: resolve(__dirname, 'functions.html')
         },
         output: {
           // Organize output files  

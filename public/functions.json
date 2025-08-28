@@ -1,0 +1,24 @@
+{
+  "functions": [
+    {
+      "description": "Add two numbers together",
+      "id": "EXAMPLEFUNCTION",
+      "name": "EXAMPLEFUNCTION",
+      "parameters": [
+        {
+          "description": "First number to add",
+          "name": "number1",
+          "type": "number"
+        },
+        {
+          "description": "Second number to add", 
+          "name": "number2",
+          "type": "number"
+        }
+      ],
+      "result": {
+        "type": "number"
+      }
+    }
+  ]
+}

@@ -91,6 +91,20 @@ Uses localhost:3000 for all resource URLs.
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          
+          <!-- Custom Functions Extension Point -->
+          <ExtensionPoint xsi:type="CustomFunctions">
+            <Script>
+              <SourceLocation resid="Functions.Script.Url"/>
+            </Script>
+            <Page>
+              <SourceLocation resid="Functions.Page.Url"/>
+            </Page>
+            <Metadata>
+              <SourceLocation resid="Functions.Metadata.Url"/>
+            </Metadata>
+            <Namespace resid="Functions.Namespace"/>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -106,11 +120,15 @@ Uses localhost:3000 for all resource URLs.
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000"/>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
+        <bt:Url id="Functions.Script.Url" DefaultValue="https://localhost:3000/functions.html"/>
+        <bt:Url id="Functions.Page.Url" DefaultValue="https://localhost:3000/functions.html"/>
+        <bt:Url id="Functions.Metadata.Url" DefaultValue="https://localhost:3000/functions.json"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with Prime Capital"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="Prime Capital"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Taskpane"/>
+        <bt:String id="Functions.Namespace" DefaultValue="PC"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your Prime Capital add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
