@@ -1,3 +1,4 @@
+"use strict";
 /* global Office, CustomFunctions */
 /**
  * PC.IRR - Takes five cells as input and adds them together
