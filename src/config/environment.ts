@@ -91,6 +91,11 @@ if (environment === 'development') {
     apiBaseUrl,
     manifestUrl,
     assetBaseUrl,
-    hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A'
+    hostname: typeof window !== 'undefined' ? window.location.hostname : 'N/A',
+    // Add asset URL examples for verification
+    exampleAssetUrls: {
+      logo: `${assetBaseUrl}/images/logos/PCAG_white_trans.svg`,
+      icon: `${assetBaseUrl}/images/icons/icon-32.png`
+    }
   });
 }
