@@ -92,11 +92,21 @@ if ($poetryCmd) {
         }
     } else {
         Write-Warning "Poetry virtual environment not found, using system Python"
-        $pythonPath = $pythonCmd.Source
+        $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+        if ($pythonCmd) {
+            $pythonPath = $pythonCmd.Source
+        } else {
+            Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
+        }
     }
 } else {
     Write-Host "  Using system Python (Poetry not found)" -ForegroundColor Yellow
-    $pythonPath = $pythonCmd.Source
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonCmd) {
+        $pythonPath = $pythonCmd.Source
+    } else {
+        Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
+    }
 }
 $pythonVersion = python --version 2>&1
 Write-Host "  Python: $pythonVersion" -ForegroundColor Green
@@ -346,7 +356,7 @@ if (-not $service -or $service.Status -ne "Running") {
     foreach ($logFile in $logs) {
         if (Test-Path $logFile) {
             $logName = Split-Path $logFile -Leaf
-            Write-Host "`nRecent entries from $logName:" -ForegroundColor Yellow
+            Write-Host "`nRecent entries from ${logName}:" -ForegroundColor Yellow
             Get-Content $logFile -Tail 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
         }
     }
