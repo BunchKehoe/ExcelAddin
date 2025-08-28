@@ -120,8 +120,8 @@ Uses localhost:3000 for all resource URLs.
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000"/>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
-        <bt:Url id="Functions.Script.Url" DefaultValue="https://localhost:3000/commands.html"/>
-        <bt:Url id="Functions.Page.Url" DefaultValue="https://localhost:3000/commands.html"/>
+        <bt:Url id="Functions.Script.Url" DefaultValue="https://localhost:3000/functions.html"/>
+        <bt:Url id="Functions.Page.Url" DefaultValue="https://localhost:3000/functions.html"/>
         <bt:Url id="Functions.Metadata.Url" DefaultValue="https://localhost:3000/functions.json"/>
       </bt:Urls>
       <bt:ShortStrings>

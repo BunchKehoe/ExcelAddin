@@ -121,8 +121,8 @@ Update the domain names and GUID before deployment.
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://server-vs84.intranet.local:9443/excellence"/>
         <bt:Url id="Commands.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/commands.html"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/taskpane.html"/>
-        <bt:Url id="Functions.Script.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/commands.html"/>
-        <bt:Url id="Functions.Page.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/commands.html"/>
+        <bt:Url id="Functions.Script.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/functions.html"/>
+        <bt:Url id="Functions.Page.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/functions.html"/>
         <bt:Url id="Functions.Metadata.Url" DefaultValue="https://server-vs84.intranet.local:9443/excellence/functions.json"/>
       </bt:Urls>
       <bt:ShortStrings>
