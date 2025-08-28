@@ -1,5 +1,10 @@
 /* global Office, CustomFunctions */
 
+// Type declaration for CustomFunctions
+declare const CustomFunctions: {
+  associate: (id: string, func: Function) => void;
+} | undefined;
+
 /**
  * PC.IRR - Takes five cells as input and adds them together
  * @customfunction PC.IRR
@@ -10,7 +15,7 @@
  * @param cell5 Fifth cell value
  * @returns The sum of all five cell values
  */
-function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: number): number {
+export function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: number): number {
   // Validate inputs are numbers
   const inputs = [cell1, cell2, cell3, cell4, cell5];
   
@@ -33,7 +38,7 @@ function IRR(cell1: number, cell2: number, cell3: number, cell4: number, cell5: 
  * @param delimiter The delimiter to use (default comma with space)
  * @returns The joined string
  */
-function JOINCELLS(range: any[][], delimiter: string = ", "): string {
+export function JOINCELLS(range: any[][], delimiter: string = ", "): string {
   console.log('JOINCELLS called with range:', range, 'delimiter:', delimiter);
   
   if (!range || !Array.isArray(range)) {
@@ -65,7 +70,20 @@ function JOINCELLS(range: any[][], delimiter: string = ", "): string {
   return result;
 }
 
+// Register the functions with CustomFunctions when available (non-shared runtime)
+if (typeof CustomFunctions !== 'undefined') {
+  CustomFunctions.associate("PC.IRR", IRR);
+  CustomFunctions.associate("PC.JOINCELLS", JOINCELLS);
+}
+
 // Register the functions with Office
 Office.onReady(() => {
   console.log('Prime Capital Custom Functions ready');
+  
+  // For shared runtime - also register functions when Office is ready
+  if (typeof CustomFunctions !== 'undefined') {
+    CustomFunctions.associate("PC.IRR", IRR);
+    CustomFunctions.associate("PC.JOINCELLS", JOINCELLS);
+    console.log('Custom functions associated with CustomFunctions runtime');
+  }
 });

@@ -16,63 +16,47 @@ function buildCustomFunctions() {
     fs.mkdirSync('./public')
   }
   
-  // Use TypeScript compiler to compile custom functions as regular JS (no modules)
-  const tsConfigForCustomFunctions = {
-    compilerOptions: {
-      target: 'ES2015',
-      module: 'None',  // Don't use modules - Excel Custom Functions requirement
-      lib: ['ES2015', 'DOM'],
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      forceConsistentCasingInFileNames: true,
-      declaration: false,
-      outDir: './dist'
-    },
-    include: ['src/functions/functions.ts']
+  // Read the TypeScript source
+  const functionsTs = fs.readFileSync('./src/functions/functions.ts', 'utf8')
+  
+  // Create standalone version without exports and type annotations for Excel Custom Functions runtime
+  let standaloneVersion = functionsTs
+    .replace(/export function/g, 'function')  // Remove export keywords
+    .replace(/export \{[^}]*\};?/g, '')       // Remove export statements
+    .replace(/import[^;]+;/g, '')             // Remove any import statements
+    .replace(/: number/g, '')                 // Remove number type annotations
+    .replace(/: string/g, '')                 // Remove string type annotations  
+    .replace(/: any\[\]\[\]/g, '')            // Remove any[][] type annotations
+    .replace(/: string\[\]/g, '')             // Remove string[] type annotations
+    .replace(/\/\/ Type declaration for CustomFunctions[\s\S]*?\} \| undefined;/g, '') // Remove type declarations block
+  
+  // Write standalone JavaScript version to public directory
+  const standaloneJs = `"use strict";\n${standaloneVersion}`
+  
+  fs.writeFileSync('./public/customfunctions.js', standaloneJs)
+  console.log('Custom functions standalone version created at public/customfunctions.js')
+  
+  // Also create functions.js (referenced by functions.html)
+  fs.writeFileSync('./public/functions.js', standaloneJs)
+  console.log('Custom functions standalone version created at public/functions.js')
+  
+  // Copy functions.json metadata to public directory
+  const functionsJsonSrc = './src/functions/functions.json'
+  const functionsJsonDest = './public/functions.json'
+  
+  if (fs.existsSync(functionsJsonSrc)) {
+    fs.copyFileSync(functionsJsonSrc, functionsJsonDest)
+    console.log('Functions metadata copied to public/functions.json')
   }
   
-  // Write temporary tsconfig
-  fs.writeFileSync('./tsconfig.customfunctions.json', JSON.stringify(tsConfigForCustomFunctions, null, 2))
+  // Copy functions.html to public directory
+  const functionsHtmlSrc = './src/functions/functions.html'
+  const functionsHtmlDest = './public/functions.html'
   
-  // Compile TypeScript to regular JavaScript
-  exec('npx tsc -p tsconfig.customfunctions.json --outFile dist/customfunctions.js', (error, stdout, stderr) => {
-    if (error) {
-      console.error('Error compiling custom functions:', error)
-      console.log('Using pre-compiled JavaScript version...')
-      
-      // If TypeScript compilation fails, copy existing JS version
-      const fallbackPath = './public/customfunctions.js'
-      if (fs.existsSync(fallbackPath)) {
-        console.log('Using existing customfunctions.js')
-      }
-    } else {
-      console.log('Custom functions compiled successfully from TypeScript!')
-      
-      // Copy the compiled file to public directory for web serving
-      const distPath = './dist/customfunctions.js'
-      const publicPath = './public/customfunctions.js'
-      
-      if (fs.existsSync(distPath)) {
-        fs.copyFileSync(distPath, publicPath)
-        console.log('Custom functions copied to public/customfunctions.js')
-      }
-    }
-    
-    // Clean up temporary tsconfig
-    if (fs.existsSync('./tsconfig.customfunctions.json')) {
-      fs.unlinkSync('./tsconfig.customfunctions.json')
-    }
-    
-    // Copy functions.json metadata to public directory
-    const functionsJsonSrc = './src/functions/functions.json'
-    const functionsJsonDest = './public/functions.json'
-    
-    if (fs.existsSync(functionsJsonSrc)) {
-      fs.copyFileSync(functionsJsonSrc, functionsJsonDest)
-      console.log('Functions metadata copied to public/functions.json')
-    }
-  })
+  if (fs.existsSync(functionsHtmlSrc)) {
+    fs.copyFileSync(functionsHtmlSrc, functionsHtmlDest)
+    console.log('Functions HTML copied to public/functions.html')
+  }
 }
 
 buildCustomFunctions()
