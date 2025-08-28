@@ -32,12 +32,10 @@ async def get_categories():
         
     except Exception as e:
         logger.error(f"Error getting categories: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )
 
 
@@ -67,12 +65,11 @@ async def get_funds(catalog: str):
         
     except Exception as e:
         logger.error(f"Error getting funds for catalog {catalog}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[],
+            fund_filtering_available=False
         )
 
 
@@ -132,10 +129,8 @@ async def download_raw_data(request_data: RawDataDownloadRequest):
         raise
     except Exception as e:
         logger.error(f"Error downloading raw data: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )
