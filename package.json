@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "npx vite --host 0.0.0.0 --port 3000",
     "build": "npx vite build --mode production",
-    "build:dev": "npx vite build --mode development && node build-customfunctions.cjs",
-    "build:staging": "npx vite build --mode staging && node build-customfunctions.cjs",
-    "build:prod": "npx vite build --mode production && node build-customfunctions.cjs",
+    "build:dev": "npx vite build --mode development",
+    "build:staging": "npx vite build --mode staging",
+    "build:prod": "npx vite build --mode production",
     "preview": "npx vite preview --host 0.0.0.0 --port 3000",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.cache",
@@ -31,6 +31,7 @@
     "axios": "^1.11.0",
     "dayjs": "^1.11.13",
     "express": "^4.18.2",
+    "node-fetch": "^3.3.2",
     "node-windows": "^1.0.0-beta.8",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

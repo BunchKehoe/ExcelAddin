@@ -14,7 +14,8 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import theme from '../theme';
-import { assetBaseUrl } from '../config/environment';
+import { getLogoUrl } from '../utils/assetUtils';
+import AssetDebugPanel from './AssetDebugPanel';
 
 // Lazy load page components to reduce initial bundle size
 const DatabasePage = lazy(() => import('./pages/DatabasePage'));
@@ -142,7 +143,7 @@ const App: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
               <Box
                 component="img"
-                src={`${assetBaseUrl}/images/logos/PCAG_white_trans.png`}
+                src={getLogoUrl('PCAG_white_trans.svg')}
                 alt="Prime Capital Logo"
                 sx={{
                   height: 24,
@@ -167,6 +168,7 @@ const App: React.FC = () => {
         <Box sx={{ minHeight: '100vh-100px' }}>
           {renderPage()}
         </Box>
+        <AssetDebugPanel />
       </Box>
      </LocalizationProvider>
     </ThemeProvider>

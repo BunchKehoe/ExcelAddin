@@ -32,12 +32,9 @@ async def upload_data(request_data: DataUploadRequest):
         processed_data = []
         for i, record in enumerate(request_data.data):
             if not isinstance(record, dict):
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        'success': False,
-                        'error': f'Invalid record format at index {i}'
-                    }
+                return StandardResponse(
+                    success=False,
+                    error=f'Invalid record format at index {i}'
                 )
             
             # Add metadata to each record
@@ -97,67 +94,49 @@ async def upload_data(request_data: DataUploadRequest):
                 )
             else:
                 logger.error(f"NiFi endpoint returned status {response.status_code}: {response.text}")
-                raise HTTPException(
-                    status_code=502,
-                    detail={
-                        'success': False,
-                        'error': f'NiFi processing failed with status {response.status_code}',
-                        'details': response.text[:500] if response.text else None
-                    }
+                return StandardResponse(
+                    success=False,
+                    error=f'NiFi processing failed with status {response.status_code}',
+                    details=response.text[:500] if response.text else None
                 )
                 
         except requests.exceptions.SSLError as e:
             logger.error(f"SSL error when connecting to NiFi endpoint: {str(e)}")
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    'success': False,
-                    'error': 'SSL certificate verification failed when connecting to NiFi',
-                    'details': 'Check certificate configuration in backend/certificates/ directory',
-                    'ssl_error': str(e)
-                }
+            return StandardResponse(
+                success=False,
+                error='SSL certificate verification failed when connecting to NiFi',
+                details='Check certificate configuration in backend/certificates/ directory',
+                ssl_error=str(e)
             )
             
         except requests.exceptions.Timeout:
             logger.error("Timeout when connecting to NiFi endpoint")
-            raise HTTPException(
-                status_code=504,
-                detail={
-                    'success': False,
-                    'error': 'Upload timeout - NiFi endpoint did not respond in time'
-                }
+            return StandardResponse(
+                success=False,
+                error='Upload timeout - NiFi endpoint did not respond in time'
             )
             
         except requests.exceptions.ConnectionError:
             logger.error("Connection error when connecting to NiFi endpoint")
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    'success': False,
-                    'error': 'Unable to connect to NiFi endpoint'
-                }
+            return StandardResponse(
+                success=False,
+                error='Unable to connect to NiFi endpoint'
             )
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error when connecting to NiFi: {str(e)}")
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    'success': False,
-                    'error': f'Request failed: {str(e)}'
-                }
+            return StandardResponse(
+                success=False,
+                error=f'Request failed: {str(e)}'
             )
     
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in upload_data: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': 'Internal server error during upload processing'
-            }
+        return StandardResponse(
+            success=False,
+            error='Internal server error during upload processing'
         )
 
 
@@ -192,12 +171,10 @@ async def get_upload_types():
     
     except Exception as e:
         logger.error(f"Error getting upload types: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': 'Failed to retrieve upload types'
-            }
+        return UploadTypesResponse(
+            success=False,
+            error='Failed to retrieve upload types',
+            upload_types=[]
         )
 
 
@@ -219,10 +196,7 @@ async def get_upload_status(upload_id: str):
     
     except Exception as e:
         logger.error(f"Error getting upload status: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': 'Failed to retrieve upload status'
-            }
+        return StandardResponse(
+            success=False,
+            error='Failed to retrieve upload status'
         )

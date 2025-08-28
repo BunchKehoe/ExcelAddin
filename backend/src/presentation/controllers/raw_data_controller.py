@@ -32,12 +32,10 @@ async def get_categories():
         
     except Exception as e:
         logger.error(f"Error getting categories: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )
 
 
@@ -67,12 +65,11 @@ async def get_funds(catalog: str):
         
     except Exception as e:
         logger.error(f"Error getting funds for catalog {catalog}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[],
+            fund_filtering_available=False
         )
 
 
@@ -83,12 +80,10 @@ async def download_raw_data(request_data: RawDataDownloadRequest):
         # Check if fund is required for this catalog
         if has_fund_filtering(request_data.catalog):
             if not request_data.fund:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        'success': False,
-                        'error': 'Fund is required for this catalog'
-                    }
+                return DataResponse(
+                    success=False,
+                    error='Fund is required for this catalog',
+                    data=[]
                 )
         
         # Create request DTO - use empty string for fund if not available
@@ -128,14 +123,10 @@ async def download_raw_data(request_data: RawDataDownloadRequest):
                 data=data_list
             )
     
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error downloading raw data: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )

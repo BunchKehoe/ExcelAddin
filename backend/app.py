@@ -7,10 +7,47 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import sys
 import os
+import socket
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+def detect_backend_environment() -> str:
+    """
+    Detect the current backend environment based on various indicators.
+    Returns 'development', 'staging', or 'production'.
+    """
+    # Check environment variable first (most explicit)
+    env = os.getenv('ENVIRONMENT', '').lower()
+    if env in ['development', 'dev', 'local']:
+        return 'development'
+    elif env in ['staging', 'stage', 'test']:
+        return 'staging'
+    elif env in ['production', 'prod', 'live']:
+        return 'production'
+    
+    # Check hostname patterns as fallback
+    try:
+        hostname = socket.gethostname().lower()
+        if 'vs81t' in hostname or 'staging' in hostname:
+            return 'staging'
+        elif 'vs84' in hostname or 'prod' in hostname:
+            return 'production'
+    except:
+        pass
+    
+    # Default to development for safety (uses mock data)
+    return 'development'
+
+# Detect environment and load appropriate .env file
+environment = detect_backend_environment()
+env_file = f'.env.{environment}'
+env_path = os.path.join(os.path.dirname(__file__), env_file)
+
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+    print(f"Loaded environment configuration from {env_file}")
+else:
+    print(f"Warning: Environment file {env_file} not found, using system environment variables")
+    load_dotenv()  # Fallback to default .env file
 
 # Add the src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))

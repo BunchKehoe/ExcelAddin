@@ -31,12 +31,10 @@ async def get_securities():
         
     except Exception as e:
         logger.error(f"Error getting securities: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )
 
 
@@ -57,12 +55,10 @@ async def get_fields(security: str):
         
     except Exception as e:
         logger.error(f"Error getting fields for security {security}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )
 
 
@@ -111,10 +107,8 @@ async def download_market_data(request_data: MarketDataDownloadRequest):
         raise
     except Exception as e:
         logger.error(f"Error downloading market data: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'success': False,
-                'error': str(e)
-            }
+        return DataResponse(
+            success=False,
+            error=str(e),
+            data=[]
         )

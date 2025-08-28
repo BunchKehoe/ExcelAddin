@@ -1,5 +1,5 @@
 # ExcelAddin Backend Deployment Script
-# Deploys Python Flask backend as NSSM service for Windows Server 10
+# Deploys Python FastAPI backend as NSSM service for Windows Server 10
 #
 # ENVIRONMENT AUTO-DETECTION:
 # - server-vs84*  -> production
@@ -67,31 +67,78 @@ $LogDir = "C:\Logs\ExcelAddin"
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  ExcelAddin Backend Deployment (NSSM)" -ForegroundColor Green  
-Write-Host "  Environment: $Environment ($(if ([string]::IsNullOrEmpty($PSBoundParameters['Environment'])) { 'auto-detected' } else { 'specified' }))" -ForegroundColor Green
+if ([string]::IsNullOrEmpty($PSBoundParameters['Environment'])) {
+    $envSource = "auto-detected"
+} else {
+    $envSource = "specified"
+}
+Write-Host "  Environment: $Environment ($envSource)" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
 # Check prerequisites
 Write-Host "Checking prerequisites..." -ForegroundColor Yellow
 
-# Check Python
-$pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-if ($pythonCmd) {
-    $pythonPath = $pythonCmd.Source
-} else {
-    Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
+# Initialize Python path variable
+$pythonPath = ""
+
+# Check for Poetry and get the virtual environment Python path
+$poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
+if ($poetryCmd) {
+    Write-Host "  Using Poetry for virtual environment" -ForegroundColor Green
+    Set-Location $BackendPath
+    
+    # Get the virtual environment path from Poetry
+    $venvPath = ""
+    try {
+        $venvPath = poetry env info --path 2>$null
+    } catch {
+        $venvPath = ""
+    }
+    
+    if ($venvPath -and (Test-Path $venvPath)) {
+        $poetryPythonPath = Join-Path $venvPath "Scripts\python.exe"
+        if (Test-Path $poetryPythonPath) {
+            $pythonPath = $poetryPythonPath
+            Write-Host "  Poetry virtual environment: $venvPath" -ForegroundColor Green
+            Write-Host "  Poetry Python executable: $pythonPath" -ForegroundColor Green
+        } else {
+            Write-Warning "Poetry virtual environment Python not found at: $poetryPythonPath"
+            $pythonPath = ""
+        }
+    } else {
+        Write-Warning "Poetry virtual environment not found"
+        $pythonPath = ""
+    }
 }
-$pythonVersion = python --version 2>&1
-Write-Host "  Python: $pythonVersion" -ForegroundColor Green
+
+# Fall back to system Python if Poetry not available or venv not found
+if ([string]::IsNullOrEmpty($pythonPath)) {
+    Write-Host "  Using system Python" -ForegroundColor Yellow
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonCmd) {
+        $pythonPath = $pythonCmd.Source
+    } else {
+        Write-Error "Python not found. Please install Python 3.8+ and add to PATH."
+    }
+}
+
+# Verify Python works
+try {
+    $pythonVersion = & $pythonPath --version 2>&1
+    Write-Host "  Python: $pythonVersion" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to execute Python at: $pythonPath"
+}
 
 # Check NSSM
 $nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
 if ($nssmCmd) {
     $nssmPath = $nssmCmd.Source
+    Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
 } else {
     Write-Error "NSSM not found. Please install NSSM and add to PATH."
 }
-Write-Host "  NSSM: Found at $nssmPath" -ForegroundColor Green
 
 # Verify paths
 Write-Host "Verifying paths..." -ForegroundColor Yellow
@@ -118,18 +165,18 @@ Write-Host "  Source file: $envSourceFile" -ForegroundColor Cyan
 Write-Host "  Target file: $envTargetFile" -ForegroundColor Cyan
 
 if (Test-Path $envSourceFile) {
-    Write-Host "  ✓ Found environment file for '$Environment'" -ForegroundColor Green
+    Write-Host "  Found environment file for '$Environment'" -ForegroundColor Green
     Write-Host "  Copying $envSourceFile to $envTargetFile" -ForegroundColor Green
     Copy-Item $envSourceFile $envTargetFile -Force
     
     # Verify the copy was successful
     if (Test-Path $envTargetFile) {
-        Write-Host "  ✓ Environment configuration applied successfully" -ForegroundColor Green
+        Write-Host "  Environment configuration applied successfully" -ForegroundColor Green
     } else {
         Write-Error "Failed to copy environment file to $envTargetFile"
     }
 } else {
-    Write-Error "Environment file not found: $envSourceFile`nAvailable .env files in $BackendPath`:"
+    Write-Error "Environment file not found: $envSourceFile`nAvailable .env files in $BackendPath :"
     Get-ChildItem $BackendPath -Name ".env.*" | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
     Write-Host ""
     Write-Host "Please ensure you have a .env.$Environment file or specify a different environment with -Environment parameter" -ForegroundColor Red
@@ -145,8 +192,7 @@ if (-not (Test-Path $LogDir)) {
 }
 
 # Check if port is in use (skip backend itself)
-$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
-    Where-Object { $_.State -eq "Listen" }
+$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq "Listen" }
 if ($existingProcess) {
     $processId = $existingProcess.OwningProcess
     $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
@@ -214,7 +260,6 @@ if (-not $SkipInstall) {
     # Check for Poetry first (preferred), then pip
     $poetryCmd = Get-Command poetry -ErrorAction SilentlyContinue
     if ($poetryCmd) {
-        $poetryPath = $poetryCmd.Source
         Write-Host "  Using Poetry for dependency management" -ForegroundColor Green
         poetry install
         if ($LASTEXITCODE -ne 0) {
@@ -248,8 +293,8 @@ nssm set $ServiceName Description $ServiceDescription
 nssm set $ServiceName AppDirectory $BackendPath
 nssm set $ServiceName Start SERVICE_AUTO_START
 
-# Set environment variables
-nssm set $ServiceName AppEnvironmentExtra "FLASK_ENV=$Environment;PORT=$Port;HOST=127.0.0.1;ENVIRONMENT=$Environment"
+# Set environment variables (FastAPI-specific)
+nssm set $ServiceName AppEnvironmentExtra "ENVIRONMENT=$Environment;PORT=$Port;HOST=0.0.0.0;DEBUG=false"
 
 # Configure logging
 nssm set $ServiceName AppStdout "$LogDir\backend-stdout.log"
@@ -268,9 +313,38 @@ if ($Debug) {
     nssm dump $ServiceName
 }
 
-# Start service
+# Start service with enhanced error reporting
 Write-Host "Starting service..." -ForegroundColor Yellow
-Start-Service -Name $ServiceName
+try {
+    Start-Service -Name $ServiceName -ErrorAction Stop
+    Write-Host "Service start command executed successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to start service: $($_.Exception.Message)"
+    Write-Host "Checking service logs for more details..." -ForegroundColor Yellow
+    
+    # Check if log files exist and show recent entries
+    $stdoutLog = "$LogDir\backend-stdout.log"
+    $stderrLog = "$LogDir\backend-stderr.log"
+    $serviceLog = "$LogDir\service-startup.log"
+    
+    if (Test-Path $stderrLog) {
+        Write-Host "`nRecent stderr log entries:" -ForegroundColor Red
+        Get-Content $stderrLog -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    }
+    
+    if (Test-Path $serviceLog) {
+        Write-Host "`nRecent service startup log entries:" -ForegroundColor Yellow
+        Get-Content $serviceLog -Tail 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+    }
+    
+    # Show service status
+    $failedService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($failedService) {
+        Write-Host "`nService status: $($failedService.Status)" -ForegroundColor Red
+    }
+    
+    exit 1
+}
 
 # Wait for service to start with status checking
 $timeout = 20
@@ -281,12 +355,36 @@ do {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 } while ((-not $service -or $service.Status -ne "Running") -and $elapsed -lt $timeout)
 
-# Verify service status
+# Verify service status with enhanced debugging
+$service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $service -or $service.Status -ne "Running") {
-    Write-Error "Service failed to start within $timeout seconds. Check logs at: $LogDir"
+    Write-Error "Service failed to start within $timeout seconds."
     if ($service) {
         Write-Host "  Current Status: $($service.Status)" -ForegroundColor Red
     }
+    
+    Write-Host "`nTroubleshooting information:" -ForegroundColor Yellow
+    Write-Host "  Service logs directory: $LogDir" -ForegroundColor Cyan
+    Write-Host "  Backend directory: $BackendPath" -ForegroundColor Cyan
+    Write-Host "  Python executable: $pythonPath" -ForegroundColor Cyan
+    Write-Host "  Service script: $ServiceScript" -ForegroundColor Cyan
+    
+    # Show recent log entries if available
+    $logs = @("$LogDir\backend-stderr.log", "$LogDir\service-startup.log", "$LogDir\backend-stdout.log")
+    foreach ($logFile in $logs) {
+        if (Test-Path $logFile) {
+            $logName = Split-Path $logFile -Leaf
+            Write-Host "`nRecent entries from $logName" -ForegroundColor Yellow
+            Get-Content $logFile -Tail 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+        }
+    }
+    
+    Write-Host "`nManual troubleshooting steps:" -ForegroundColor Yellow
+    Write-Host "  1. Check if Poetry virtual environment is set up: poetry env info" -ForegroundColor Gray
+    Write-Host "  2. Test manual run: cd '$BackendPath' && python run.py" -ForegroundColor Gray
+    Write-Host "  3. Check dependencies: poetry install" -ForegroundColor Gray
+    Write-Host "  4. View full logs: Get-Content '$LogDir\backend-stderr.log'" -ForegroundColor Gray
+    
     exit 1
 }
 
