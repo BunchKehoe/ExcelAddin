@@ -62,11 +62,13 @@ The add-in automatically detects the environment based on the hostname and confi
 
 ## 📚 Documentation
 
-This project includes comprehensive documentation organized into three main guides:
+This project includes comprehensive documentation organized into four main guides:
 
 📖 **[Technical Guide](TECHNICAL_GUIDE.md)** - Detailed technical overview, installation procedures, architecture documentation, and troubleshooting
 
 🚀 **[Deployment Guide](deployment/README.md)** - Production deployment procedures for Windows Server environments with service management and configuration
+
+🖼️ **[Asset Serving Guide](ASSET_SERVING.md)** - Environment-specific asset serving and conditional image references
 
 🛠️ **Troubleshooting** - Use `.\deployment\troubleshooting.ps1` for comprehensive diagnostics and automated fixes
 
